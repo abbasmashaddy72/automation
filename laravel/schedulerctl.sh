@@ -20,18 +20,18 @@ NC='\033[0m'
 
 # === Help ===
 show_help() {
-    echo -e "${BLUE}Laravel Horizon Supervisor Helper${NC}"
+    echo -e "${BLUE}Laravel Scheduler Supervisor Helper${NC}"
     echo ""
-    echo "Usage: ./horizonctl.sh [options]"
+    echo "Usage: ./schedulerctl.sh [options]"
     echo ""
     echo "Options:"
-    echo "  --path=/path/to/project     Path to Laravel project (resolves artisan + logs)"
-    echo "  --env=staging               Add environment suffix to supervisor config"
-    echo "  --remove                    Remove Supervisor config and stop Horizon"
-    echo "  --status                    Show Horizon Supervisor status"
-    echo "  --wait-seconds=5            Wait after supervisor update (default: 2)"
-    echo "  --force                     Run non-interactively (no confirmations)"
-    echo "  --help                      Show this help message"
+    echo "  --path=/path/to/project      Laravel project root (default: pwd)"
+    echo "  --env=staging                Add environment suffix to supervisor config"
+    echo "  --remove                     Remove Scheduler Supervisor config"
+    echo "  --status                     Show Scheduler Supervisor status"
+    echo "  --wait-seconds=5             Wait after supervisor update (default: 2)"
+    echo "  --force                      Run non-interactively (no confirmations)"
+    echo "  --help                       Show this help message"
     exit 0
 }
 
@@ -55,37 +55,37 @@ SUPERVISOR_SAFE_NAME=$(echo "$PROJECT_NAME" | tr -cd '[:alnum:]_')
 
 ARTISAN_PATH="$PROJECT_ROOT/artisan"
 LOGS_DIR="$PROJECT_ROOT/logs"
-LOG_FILE="$LOGS_DIR/horizon.log"
+LOG_FILE="$LOGS_DIR/scheduler.log"
 SUPERVISOR_DIR=$(sudo grep -Po '(?<=files = )[^ ]+' /etc/supervisord.conf 2>/dev/null | sed 's|/\*\.ini||')
 SUPERVISOR_DIR=${SUPERVISOR_DIR:-"/etc/supervisord.d"}
-SUPERVISOR_CONFIG="$SUPERVISOR_DIR/horizon_${SUPERVISOR_SAFE_NAME}.ini"
+SUPERVISOR_CONFIG="$SUPERVISOR_DIR/scheduler_${SUPERVISOR_SAFE_NAME}.ini"
 
 # === Check Root ===
 [[ "$EUID" == 0 ]] && echo -e "${RED}❌ Do not run as root.${NC}" && exit 1
 
 # === Status Only ===
 if [[ "$STATUS_ONLY" == true ]]; then
-    echo -e "${BLUE}📋 Horizon Status:${NC}"
-    sudo supervisorctl status | grep "horizon_${SUPERVISOR_SAFE_NAME}" || echo -e "${RED}❌ Not running${NC}"
+    echo -e "${BLUE}📋 Scheduler Status:${NC}"
+    sudo supervisorctl status | grep "scheduler_${SUPERVISOR_SAFE_NAME}" || echo -e "${RED}❌ Not running${NC}"
     exit 0
 fi
 
 # === Remove Mode ===
 if [[ "$REMOVE" == true ]]; then
-    echo -e "${YELLOW}🧹 Removing Horizon Supervisor config...${NC}"
+    echo -e "${YELLOW}🧹 Removing Scheduler config...${NC}"
     [ -f "$SUPERVISOR_CONFIG" ] && {
-        sudo supervisorctl stop "horizon_${SUPERVISOR_SAFE_NAME}" || true
+        sudo supervisorctl stop "scheduler_${SUPERVISOR_SAFE_NAME}" || true
         sudo rm -f "$SUPERVISOR_CONFIG"
         sudo supervisorctl reread
         sudo supervisorctl update
-        echo -e "${GREEN}✅ Removed horizon_${SUPERVISOR_SAFE_NAME}${NC}"
+        echo -e "${GREEN}✅ Removed scheduler_${SUPERVISOR_SAFE_NAME}${NC}"
     } || echo -e "${BLUE}ℹ️ No config to remove.${NC}"
     exit 0
 fi
 
 # === Confirm ===
 if [[ "$FORCE_MODE" == false ]]; then
-    echo "⚙️  Configuring Laravel Horizon Supervisor:"
+    echo "⚙️  Configuring Laravel Scheduler Supervisor:"
     echo "   📂 Project: $PROJECT_NAME"
     echo "   📍 Path: $PROJECT_ROOT"
     [[ -n "$ENVIRONMENT" ]] && echo "   🌐 Env: $ENVIRONMENT"
@@ -106,11 +106,6 @@ command -v supervisorctl >/dev/null || {
     echo -e "${RED}❌ artisan not found at $ARTISAN_PATH${NC}"
     exit 1
 }
-
-if ! grep -q "laravel/horizon" "$PROJECT_ROOT/composer.json" 2>/dev/null && [ ! -d "$PROJECT_ROOT/vendor/laravel/horizon" ]; then
-    echo -e "${RED}❌ Laravel Horizon not found in this project.${NC}"
-    exit 1
-fi
 
 if ! sudo systemctl is-active --quiet supervisord; then
     echo -e "${YELLOW}⚠️  Starting Supervisor...${NC}"
@@ -136,22 +131,22 @@ sudo chmod 755 "$SUPERVISOR_DIR"
 if [ -f "$SUPERVISOR_CONFIG" ]; then
     if [[ "$FORCE_MODE" == true ]]; then
         echo -e "${YELLOW}⚙️  Overwriting existing config...${NC}"
-        sudo supervisorctl stop "horizon_${SUPERVISOR_SAFE_NAME}" || true
+        sudo supervisorctl stop "scheduler_${SUPERVISOR_SAFE_NAME}" || true
         sudo rm -f "$SUPERVISOR_CONFIG"
     else
         echo -e "${YELLOW}⚠️ Config exists: $SUPERVISOR_CONFIG${NC}"
         read -p "❓ Overwrite? (y/N): " OVERWRITE
-        [[ "$OVERWRITE" =~ ^[Yy]$ ]] && sudo supervisorctl stop "horizon_${SUPERVISOR_SAFE_NAME}" || exit 0
+        [[ "$OVERWRITE" =~ ^[Yy]$ ]] && sudo supervisorctl stop "scheduler_${SUPERVISOR_SAFE_NAME}" || exit 0
         sudo rm -f "$SUPERVISOR_CONFIG"
     fi
 fi
 
 # === Write Config ===
-echo -e "${BLUE}📦 Writing Supervisor config...${NC}"
+echo -e "${BLUE}📄 Writing Scheduler Supervisor config...${NC}"
 sudo tee "$SUPERVISOR_CONFIG" >/dev/null <<EOF
-[program:horizon_${SUPERVISOR_SAFE_NAME}]
+[program:scheduler_${SUPERVISOR_SAFE_NAME}]
 process_name=%(program_name)s
-command=php $ARTISAN_PATH horizon
+command=php $ARTISAN_PATH schedule:work
 autostart=true
 autorestart=true
 numprocs=1
@@ -172,35 +167,35 @@ sudo supervisorctl update
 echo -e "${BLUE}⏳ Waiting ${WAIT_SECONDS}s for Supervisor to register...${NC}"
 sleep "$WAIT_SECONDS"
 
-# === Start Horizon ===
-if sudo supervisorctl status | grep -q "horizon_${SUPERVISOR_SAFE_NAME}.*RUNNING"; then
-    echo -e "${GREEN}✅ Horizon is already running.${NC}"
+# === Start Scheduler ===
+if sudo supervisorctl status | grep -q "scheduler_${SUPERVISOR_SAFE_NAME}.*RUNNING"; then
+    echo -e "${GREEN}✅ Scheduler is already running.${NC}"
 else
-    echo -e "${BLUE}🚀 Starting Horizon...${NC}"
-    sudo supervisorctl start "horizon_${SUPERVISOR_SAFE_NAME}" || {
-        echo -e "${RED}❌ Failed to start Horizon. Check logs: tail -f $LOG_FILE${NC}"
+    echo -e "${BLUE}🚀 Starting Scheduler...${NC}"
+    sudo supervisorctl start "scheduler_${SUPERVISOR_SAFE_NAME}" || {
+        echo -e "${RED}❌ Failed to start Scheduler. Check logs: tail -f $LOG_FILE${NC}"
         exit 1
     }
 
     for i in {1..5}; do
-        if sudo supervisorctl status | grep -q "horizon_${SUPERVISOR_SAFE_NAME}.*RUNNING"; then
-            echo -e "${GREEN}✅ Horizon started successfully!${NC}"
+        if sudo supervisorctl status | grep -q "scheduler_${SUPERVISOR_SAFE_NAME}.*RUNNING"; then
+            echo -e "${GREEN}✅ Scheduler started successfully!${NC}"
             break
         fi
-        echo -e "${YELLOW}⏳ Waiting for Horizon to start... ($i/5)${NC}"
+        echo -e "${YELLOW}⏳ Waiting for Scheduler to start... ($i/5)${NC}"
         sleep 2
     done
 
-    if ! sudo supervisorctl status | grep -q "horizon_${SUPERVISOR_SAFE_NAME}.*RUNNING"; then
-        echo -e "${RED}❌ Horizon did not start. Logs: tail -f $LOG_FILE${NC}"
+    if ! sudo supervisorctl status | grep -q "scheduler_${SUPERVISOR_SAFE_NAME}.*RUNNING"; then
+        echo -e "${RED}❌ Scheduler did not start. Logs: tail -f $LOG_FILE${NC}"
         exit 1
     fi
 fi
 
 # Final tips
 echo ""
-echo -e "${BLUE}📌 Horizon Management:${NC}"
-echo -e "   ✅ Status:    ${GREEN}sudo supervisorctl status | grep 'horizon_${SUPERVISOR_SAFE_NAME}'${NC}"
-echo -e "   🔄 Restart:   ${YELLOW}sudo supervisorctl restart horizon_${SUPERVISOR_SAFE_NAME}${NC}"
-echo -e "   🛑 Stop:      ${RED}sudo supervisorctl stop horizon_${SUPERVISOR_SAFE_NAME}${NC}"
+echo -e "${BLUE}📌 Scheduler Management:${NC}"
+echo -e "   ✅ Status:    ${GREEN}sudo supervisorctl status | grep 'scheduler_${SUPERVISOR_SAFE_NAME}'${NC}"
+echo -e "   🔄 Restart:   ${YELLOW}sudo supervisorctl restart scheduler_${SUPERVISOR_SAFE_NAME}${NC}"
+echo -e "   🛑 Stop:      ${RED}sudo supervisorctl stop scheduler_${SUPERVISOR_SAFE_NAME}${NC}"
 echo -e "   📜 Logs:      ${BLUE}tail -f $LOG_FILE${NC}"

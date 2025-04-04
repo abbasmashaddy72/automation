@@ -27,7 +27,7 @@ git_email=$(echo "$git_email" | xargs)
 
 # === Install Git + Credential Manager ===
 log "🧩 Installing git and git-credential-manager..."
-sudo pacman -S --noconfirm --needed git git-credential-manager || log_error "Git installation failed"
+pamac -S --noconfirm --needed git git-credential-manager || log_error "Git installation failed"
 
 # === Configure Git ===
 log "🔐 Setting up Git Credential Helper..."

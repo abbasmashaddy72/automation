@@ -156,13 +156,13 @@ if $RUN_SEED; then
 fi
 
 # Tenants
-if ! $SKIP_TENANTS && grep -q "tenants:migrate-job" artisan 2>/dev/null; then
+if ! $SKIP_TENANTS && $PHP_BIN artisan list --raw 2>/dev/null | grep -q "tenants:migrate-job"; then
     if $FORCE_TENANTS; then
         section "🌍 Running tenant fresh migrations"
         $PHP_BIN artisan tenants:migrate-fresh || warn "tenant fresh migration failed"
     else
         section "🌍 Running tenant migrations"
-        $PHP_BIN artisan tenants:migrate-job || warn "tenant migrations failed"
+        $PHP_BIN artisan tenants:migrate-job --check || warn "tenant migrations failed"
     fi
 
     section "🌱 Running tenant seeders"
@@ -174,6 +174,10 @@ fi
 # Horizon Restart
 section "🔄 Restarting Laravel Horizon"
 $PHP_BIN artisan horizon:terminate || warn "Horizon terminate failed"
+
+# Scheduler Restart
+section "🔄 Restarting Laravel Scheduler"
+$PHP_BIN artisan schedule:interrupt || warn "Scheduler restart failed"
 
 # PHP-FPM Reload
 section "♻️ Reloading PHP-FPM: $PHP_FPM_SERVICE"
