@@ -155,22 +155,6 @@ if $RUN_SEED; then
     $PHP_BIN artisan db:seed $MIGRATE_FORCE || warn "db:seed failed"
 fi
 
-# Tenants
-if ! $SKIP_TENANTS && $PHP_BIN artisan list --raw 2>/dev/null | grep -q "tenants:migrate-job"; then
-    if $FORCE_TENANTS; then
-        section "🌍 Running tenant fresh migrations"
-        $PHP_BIN artisan tenants:migrate-fresh || warn "tenant fresh migration failed"
-    else
-        section "🌍 Running tenant migrations"
-        $PHP_BIN artisan tenants:migrate-job --check || warn "tenant migrations failed"
-    fi
-
-    section "🌱 Running tenant seeders"
-    $PHP_BIN artisan tenants:seeder-job || warn "tenant seeders failed"
-else
-    $SKIP_TENANTS && log "⏭️ Skipping tenant commands (--skip-tenants)"
-fi
-
 # Horizon Restart
 section "🔄 Restarting Laravel Horizon"
 $PHP_BIN artisan horizon:terminate || warn "Horizon terminate failed"
@@ -179,11 +163,27 @@ $PHP_BIN artisan horizon:terminate || warn "Horizon terminate failed"
 section "🔄 Restarting Laravel Scheduler"
 $PHP_BIN artisan schedule:interrupt || warn "Scheduler restart failed"
 
+# Tenants
+if ! $SKIP_TENANTS && $PHP_BIN artisan list --raw 2>/dev/null | grep -q "tenants:migrate-job"; then
+    if $FORCE_TENANTS; then
+        section "🌍 Running tenant fresh migrations"
+        $PHP_BIN artisan tenants:migrate-fresh || warn "tenant fresh migration failed"
+    else
+        section "🌍 Running tenant migrations"
+        $PHP_BIN artisan tenants:migrate-job || warn "tenant migrations failed"
+    fi
+
+    section "🌱 Running tenant seeders"
+    $PHP_BIN artisan tenants:seeder-job || warn "tenant seeders failed"
+else
+    $SKIP_TENANTS && log "⏭️ Skipping tenant commands (--skip-tenants)"
+fi
+
 # PHP-FPM Reload
 section "♻️ Reloading PHP-FPM: $PHP_FPM_SERVICE"
 (
     flock -w 10 9 || exit 1
-    sudo -S service "$PHP_FPM_SERVICE" reload || warn "PHP-FPM reload failed"
+    sudo systemctl reload "$PHP_FPM_SERVICE" || warn "PHP-FPM reload failed"
 ) 9>/tmp/fpmlock
 
 # Extra Commands
