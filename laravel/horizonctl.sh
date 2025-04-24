@@ -3,6 +3,8 @@
 set -e
 
 # === Defaults ===
+RESTART=false
+TERMINATE=false
 WAIT_SECONDS=2
 FORCE_MODE=false
 REMOVE=false
@@ -31,6 +33,8 @@ show_help() {
     echo "  --status                    Show Horizon Supervisor status"
     echo "  --wait-seconds=5            Wait after supervisor update (default: 2)"
     echo "  --force                     Run non-interactively (no confirmations)"
+    echo "  --restart                   Restart Horizon process"
+    echo "  --terminate                 Terminate Horizon process (via Supervisor)"
     echo "  --help                      Show this help message"
     exit 0
 }
@@ -38,6 +42,8 @@ show_help() {
 # === Parse Args ===
 for arg in "$@"; do
     case $arg in
+    --restart) RESTART=true ;;
+    --terminate) TERMINATE=true ;;
     --wait-seconds=*) WAIT_SECONDS="${arg#*=}" ;;
     --remove) REMOVE=true ;;
     --force) FORCE_MODE=true ;;
@@ -80,6 +86,28 @@ if [[ "$REMOVE" == true ]]; then
         sudo supervisorctl update
         echo -e "${GREEN}✅ Removed horizon_${SUPERVISOR_SAFE_NAME}${NC}"
     } || echo -e "${BLUE}ℹ️ No config to remove.${NC}"
+    exit 0
+fi
+
+# === Terminate Mode ===
+if [[ "$TERMINATE" == true ]]; then
+    echo -e "${YELLOW}🛑 Stopping Horizon: horizon_${SUPERVISOR_SAFE_NAME}${NC}"
+    sudo supervisorctl stop "horizon_${SUPERVISOR_SAFE_NAME}" || {
+        echo -e "${RED}❌ Failed to stop Horizon.${NC}"
+        exit 1
+    }
+    echo -e "${GREEN}✅ Horizon terminated successfully.${NC}"
+    exit 0
+fi
+
+# === Restart Mode ===
+if [[ "$RESTART" == true ]]; then
+    echo -e "${YELLOW}🔁 Restarting Horizon: horizon_${SUPERVISOR_SAFE_NAME}${NC}"
+    sudo supervisorctl restart "horizon_${SUPERVISOR_SAFE_NAME}" || {
+        echo -e "${RED}❌ Failed to restart Horizon.${NC}"
+        exit 1
+    }
+    echo -e "${GREEN}✅ Horizon restarted successfully.${NC}"
     exit 0
 fi
 
@@ -152,6 +180,7 @@ sudo tee "$SUPERVISOR_CONFIG" >/dev/null <<EOF
 [program:horizon_${SUPERVISOR_SAFE_NAME}]
 process_name=%(program_name)s
 command=php $ARTISAN_PATH horizon
+environment=HORIZON_PREFIX="${SUPERVISOR_SAFE_NAME}_horizon:"
 autostart=true
 autorestart=true
 numprocs=1
