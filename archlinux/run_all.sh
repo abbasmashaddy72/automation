@@ -24,18 +24,10 @@ run_script() {
     fi
 }
 
-# === Execute all setup scripts in order ===
-
-run_script "./system_setup.sh"
-run_script "./install_packages.sh"
-run_script "./git_setup.sh"
-run_script "./zshrc_config.sh"
-run_script "./mariadb_setup.sh"
-run_script "./setup_postgres.sh"
-run_script "./php_valet_composer_setup.sh"
-run_script "./setup_project_sites.sh"
-run_script "./task_bar_setup.sh"
-run_script "./udev_rules_setup.sh"
-run_script "./setup-ollama-openwebui.sh"
+# === Execute all scripts in numeric order ===
+for script in ./*.sh; do
+    [[ "$(basename "$script")" == "run-all.sh" ]] && continue
+    run_script "$script"
+done
 
 log "🎉 All setup scripts executed successfully!"
