@@ -1,17 +1,16 @@
 #!/bin/bash
-
 set -euo pipefail
 
-# === Setup ===
-LOGFILE="$HOME/logs/postgres_setup.log"
-mkdir -p "$(dirname "$LOGFILE")"
+# === Logger Setup ===
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/lib-logger.sh"
 
-timestamp() { date '+%F %T'; }
-log() { echo "$(timestamp) | $*" | tee -a "$LOGFILE"; }
-log_error() { echo "$(timestamp) | ❌ $*" | tee -a "$LOGFILE"; exit 1; }
+section "🐘 Starting PostgreSQL setup..."
 
+# === Install PostgreSQL ===
 log "📦 Installing PostgreSQL..."
-sudo pacman -S --noconfirm --needed postgresql || log_error "Failed to install PostgreSQL"
+sudo pacman -S --noconfirm --needed postgresql || fail "Failed to install PostgreSQL"
+ok "PostgreSQL installed."
 
 # === Prompt for postgres password securely ===
 while true; do
@@ -22,28 +21,34 @@ while true; do
     if [[ "$POSTGRES_PASSWORD" == "$POSTGRES_PASSWORD_CONFIRM" && -n "$POSTGRES_PASSWORD" ]]; then
         break
     else
-        echo "❌ Passwords do not match or were empty. Try again."
+        warn "❌ Passwords do not match or were empty. Please try again."
     fi
 done
 
-# === Initialize DB if needed ===
+# === Initialize database if not already present ===
 if [ ! -d "/var/lib/postgres/data" ]; then
     log "🔧 Initializing PostgreSQL cluster..."
-    sudo -u postgres initdb --locale "$LANG" -E UTF8 -D '/var/lib/postgres/data/' || log_error "initdb failed"
+    sudo -u postgres initdb --locale "$LANG" -E UTF8 -D '/var/lib/postgres/data/' || fail "PostgreSQL initdb failed"
+    ok "PostgreSQL initialized."
 else
-    log "✅ PostgreSQL data directory already exists. Skipping initdb."
+    ok "PostgreSQL data directory already exists. Skipping initdb."
 fi
 
-# === Enable and start PostgreSQL ===
+# === Enable and Start PostgreSQL ===
 log "🚀 Enabling and starting PostgreSQL service..."
-sudo systemctl enable --now postgresql || log_error "Failed to start PostgreSQL service"
+sudo systemctl enable --now postgresql || fail "Failed to enable/start PostgreSQL service"
 
-# === Wait and verify ===
+# === Check service status ===
 sleep 2
-sudo systemctl is-active --quiet postgresql && log "✅ PostgreSQL service is running." || log_error "PostgreSQL failed to start"
+if sudo systemctl is-active --quiet postgresql; then
+    ok "PostgreSQL service is running."
+else
+    sudo systemctl status postgresql | tee -a "$LOGFILE"
+    fail "PostgreSQL service failed to start."
+fi
 
-# === Set postgres password ===
-log "🔐 Setting postgres user password..."
-sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '${POSTGRES_PASSWORD}';" || log_error "Failed to set postgres password"
+# === Set password for postgres user ===
+log "🔐 Setting password for 'postgres' user..."
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '${POSTGRES_PASSWORD}';" || fail "Failed to set postgres password"
 
-log "🎉 PostgreSQL setup complete. User: postgres"
+ok "🎉 PostgreSQL setup complete. User: postgres"

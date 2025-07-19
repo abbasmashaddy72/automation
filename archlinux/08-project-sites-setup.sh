@@ -1,59 +1,60 @@
 #!/bin/bash
-
 set -euo pipefail
 
-# === Setup ===
+# === Logger Setup ===
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/lib-logger.sh"
+
+section "📁 Setting up Laravel-friendly Project Sites"
+
+# === Config ===
 ROOT_DIR="$HOME/Documents/Project-Sites"
+
 SUBDIRS=(
-    "Staging"
     "Experiment"
-    "Personal-Git"
+    "Local"
+    "Other-Languages"
     "Packages-Git"
     "Packages-Own"
-    "Local"
+    "Personal-Git"
+    "Staging"
     "Testing"
-    "Other-Languages"
 )
 
 PARKABLE_SUBDIRS=(
-    "Staging"
     "Experiment"
     "Local"
+    "Staging"
     "Testing"
 )
 
-timestamp() { date '+%F %T'; }
-log() { echo "$(timestamp) | $*"; }
-log_ok() { echo "$(timestamp) | ✅ $*"; }
-log_error() {
-    echo "$(timestamp) | ❌ ERROR: $*"
-    exit 1
-}
+# === Create Root Directory ===
+log "📂 Creating root directory: $ROOT_DIR"
+mkdir -p "$ROOT_DIR" || fail "Could not create root directory: $ROOT_DIR"
 
-log "📁 Creating Laravel-friendly project structure under $ROOT_DIR"
-
-mkdir -p "$ROOT_DIR" || log_error "Could not create root folder: $ROOT_DIR"
-
+# === Create Subdirectories ===
 for subdir in "${SUBDIRS[@]}"; do
     path="$ROOT_DIR/$subdir"
-    if [ -d "$path" ]; then
-        log "🔁 $subdir already exists"
+    if [[ -d "$path" ]]; then
+        warn "Directory already exists: $subdir"
     else
         mkdir -p "$path"
-        log_ok "Created $subdir"
+        ok "Created: $subdir"
     fi
 done
 
-# === Run Valet park on specific subdirectories ===
+# === Valet Park ===
 if ! command -v valet &>/dev/null; then
-    log_error "Valet is not installed. Please install Laravel Valet first."
+    fail "Laravel Valet is not installed. Cannot park folders."
 fi
 
-for park_dir in "${PARKABLE_SUBDIRS[@]}"; do
-    full_path="$ROOT_DIR/$park_dir"
-    cd "$full_path" || log_error "Failed to cd into $full_path"
-    valet park || log_error "Failed to run valet park in $full_path"
-    log_ok "✅ Valet parked in $park_dir"
+section "🚗 Parking Valet in selected directories..."
+
+for dir in "${PARKABLE_SUBDIRS[@]}"; do
+    full_path="$ROOT_DIR/$dir"
+    cd "$full_path" || fail "Failed to change into $full_path"
+    valet park || fail "Valet failed to park in $full_path"
+    ok "Valet parked in: $dir"
 done
 
-log_ok "🎉 Project-Sites directory structure created and valet parked!"
+ok "🎉 Project Sites structure created and valet parked successfully!"

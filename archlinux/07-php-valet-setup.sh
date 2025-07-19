@@ -1,133 +1,109 @@
 #!/bin/bash
+set -euo pipefail
 
-set -e
+# === Logger Setup ===
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/lib-logger.sh"
 
-LOGDIR="$HOME/logs"
-LOGFILE="$LOGDIR/php_valet_composer_setup.log"
-mkdir -p "$LOGDIR"
+section "📦 PHP, Composer, and Valet Setup"
 
-echo "📦 Starting PHP, Composer, and Valet setup..." | tee -a "$LOGFILE"
-
-# ===== Error Handling =====
-log_error() {
-    echo "[❌ ERROR] $1" | tee -a "$LOGFILE"
-    exit 1
-}
-
-log_ok() {
-    echo "[✅] $1" | tee -a "$LOGFILE"
-}
-
-# ===== PHP Packages =====
+# === PHP Packages ===
 php_packages=(
-    php php-apcu php-intl php-mbstring php-openssl php-pdo php-pdo-mysql
-    php-tokenizer php-redis php-json php-xml php-zip php-xdebug php-iconv
-    php-sqlite php-gd php-fpm
+    php
+    php-apcu
+    php-fpm
+    php-gd
+    php-iconv
+    php-intl
+    php-json
+    php-mbstring
+    php-openssl
+    php-pdo-mysql
+    php-redis
+    php-sqlite
+    php-tokenizer
+    php-xdebug
+    php-xml
+    php-zip
+    php-pdo
 )
 
-echo "📦 Installing PHP and required extensions..." | tee -a "$LOGFILE"
-
+log "📥 Installing PHP and extensions..."
 for pkg in "${php_packages[@]}"; do
     if pacman -Qi "$pkg" &>/dev/null; then
-        log_ok "$pkg is already installed."
-        continue
-    fi
-
-    if sudo pacman -S --noconfirm --needed "$pkg"; then
-        log_ok "Installed $pkg"
+        ok "$pkg is already installed."
     else
-        echo "Skipped $pkg (not found or failed)" | tee -a "$LOGFILE"
+        sudo pacman -S --needed --noconfirm "$pkg" || warn "❌ Failed or skipped: $pkg"
+        ok "Installed $pkg"
     fi
 done
 
-log_ok "Finished installing PHP packages (some may be missing)."
-
-# ===== NVM (Node Version Manager) via pacman =====
-echo "📦 Installing NVM via pacman..." | tee -a "$LOGFILE"
+# === Install NVM ===
+log "📥 Installing NVM..."
 if ! pacman -Qi nvm &>/dev/null; then
-    sudo pacman -S --noconfirm nvm || log_error "Failed to install nvm"
+    sudo pacman -S --noconfirm nvm || fail "Failed to install nvm"
 else
-    log_ok "nvm is already installed via pacman."
+    ok "nvm already installed"
 fi
 
-# ===== Node.js & NPM =====
-echo "📦 Installing Node.js and NPM..." | tee -a "$LOGFILE"
-if ! sudo pacman -S --noconfirm nodejs npm; then
-    log_error "Failed to install Node.js and NPM"
-fi
-log_ok "Node.js and NPM installed."
+# === Node.js & NPM ===
+log "📥 Installing Node.js & npm..."
+sudo pacman -S --noconfirm nodejs npm || fail "Failed to install Node.js & NPM"
+ok "Node.js and NPM installed"
 
-# ===== Composer (via pacman) =====
-echo "📦 Installing Composer from official repo..." | tee -a "$LOGFILE"
-if ! sudo pacman -S --noconfirm composer; then
-    log_error "Failed to install Composer"
-fi
-log_ok "Composer installed via pacman."
+# === Composer ===
+log "📥 Installing Composer..."
+sudo pacman -S --noconfirm composer || fail "Failed to install Composer"
+ok "Composer installed"
 
-# ===== Composer bin path in .zshrc =====
+# === Add Composer bin to PATH in .zshrc ===
 ZSHRC="$HOME/.zshrc"
-COMPOSER_PATH_LINE='export PATH="$HOME/.config/composer/vendor/bin:$PATH"'
+COMPOSER_LINE='export PATH="$HOME/.config/composer/vendor/bin:$PATH"'
+log "🔧 Ensuring Composer bin is in PATH..."
 
-echo "🔧 Adding Composer vendor bin to PATH..." | tee -a "$LOGFILE"
 if ! grep -q 'composer/vendor/bin' "$ZSHRC"; then
-    echo "$COMPOSER_PATH_LINE" >>"$ZSHRC"
-    log_ok "Added composer vendor bin to .zshrc"
+    echo "$COMPOSER_LINE" >>"$ZSHRC"
+    ok "Composer bin path added to .zshrc"
 else
-    echo "ℹ️ Composer vendor bin already exists in .zshrc" | tee -a "$LOGFILE"
+    warn "Composer bin path already exists in .zshrc"
 fi
 
-# ===== Install Valet =====
-echo "🚀 Installing Valet for Linux..." | tee -a "$LOGFILE"
+# === Install Valet for Linux ===
+section "🚀 Installing Valet"
+
 export COMPOSER_HOME="$HOME/.config/composer"
 export PATH="$HOME/.config/composer/vendor/bin:$PATH"
 
-if ! composer global require cpriego/valet-linux; then
-    log_error "Failed to require valet-linux via Composer"
-fi
-log_ok "Valet installed globally."
+composer global require cpriego/valet-linux || fail "Failed to install valet-linux"
+ok "Valet installed globally"
 
-# ===== Valet Dependencies =====
-valet_dependencies=(nss jq xsel networkmanager)
+# === Valet Dependencies ===
+valet_deps=(nss jq xsel networkmanager)
+log "📥 Installing Valet dependencies..."
+sudo pacman -S --noconfirm "${valet_deps[@]}" || fail "Failed to install Valet dependencies"
+ok "Valet dependencies installed"
 
-echo "📦 Installing dependencies for Valet..." | tee -a "$LOGFILE"
-if ! sudo pacman -S --noconfirm "${valet_dependencies[@]}"; then
-    log_error "Failed to install Valet dependencies"
-fi
-log_ok "Valet dependencies installed."
-
-# ===== Enable & Check PHP-FPM =====
-echo "🛠️ Enabling and checking php-fpm.service..." | tee -a "$LOGFILE"
-if ! systemctl list-units --all | grep -q "php-fpm.service"; then
-    log_error "php-fpm.service not found — is PHP FPM installed correctly?"
+# === Enable php-fpm ===
+section "🛠 Enabling php-fpm"
+if systemctl list-units --all | grep -q "php-fpm.service"; then
+    sudo systemctl enable --now php-fpm.service || fail "php-fpm service failed"
+    ok "php-fpm is active"
+else
+    fail "php-fpm.service not found. Was php-fpm installed?"
 fi
 
-sudo systemctl enable --now php-fpm.service
-if ! systemctl is-active --quiet php-fpm.service; then
-    log_error "php-fpm service failed to start"
-fi
-log_ok "php-fpm is running and enabled."
+# === Final Checks ===
+section "🧪 Verifying tools in PATH"
+command -v composer &>/dev/null || fail "Composer is not available in PATH"
+command -v valet &>/dev/null || fail "Valet is not available in PATH"
+ok "Composer and Valet available"
 
-# ===== Final Checks =====
-echo "🧪 Verifying Composer and Valet..." | tee -a "$LOGFILE"
+# === PHP Custom Config ===
+section "⚙️ Writing local PHP performance settings"
 
-if ! command -v composer &>/dev/null; then
-    log_error "Composer is not available in PATH"
-fi
-
-if ! command -v valet &>/dev/null; then
-    log_error "Valet is not available in PATH"
-fi
-
-log_ok "Composer and Valet verified."
-
-echo "🎉 PHP, Composer, and Valet setup completed successfully!" | tee -a "$LOGFILE"
-
-# ===== PHP Local Performance Tweaks =====
-CUSTOM_INI_PATH="/etc/php/conf.d/custom.ini"
-
-echo "⚙️ Writing PHP custom.ini for performance..." | tee -a "$LOGFILE"
-sudo tee "$CUSTOM_INI_PATH" >/dev/null <<EOF
-; Performance tweaks for local development
+CUSTOM_INI="/etc/php/conf.d/custom.ini"
+sudo tee "$CUSTOM_INI" >/dev/null <<EOF
+; Local development PHP optimizations
 
 opcache.enable=1
 opcache.enable_cli=1
@@ -146,8 +122,10 @@ upload_max_filesize=64M
 post_max_size=64M
 EOF
 
-log_ok "custom.ini written to $CUSTOM_INI_PATH"
+ok "Wrote performance config to $CUSTOM_INI"
 
-echo "🔄 Restarting php-fpm to apply changes..." | tee -a "$LOGFILE"
-sudo systemctl restart php-fpm.service || log_error "Failed to restart php-fpm"
-log_ok "php-fpm restarted with new PHP config."
+log "🔄 Restarting php-fpm..."
+sudo systemctl restart php-fpm.service || fail "Failed to restart php-fpm"
+ok "php-fpm restarted successfully"
+
+ok "🎉 PHP + Composer + Valet setup completed!"

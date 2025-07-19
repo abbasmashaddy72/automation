@@ -1,85 +1,85 @@
 #!/bin/bash
+set -euo pipefail
 
-set -e
+# === Include Logging ===
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/lib-logger.sh"
 
-LOGDIR="$HOME/logs"
-LOGFILE="$LOGDIR/system_setup.log"
-mkdir -p "$LOGDIR"
-
-# === Colors ===
-BLUE='\033[1;34m'
-GREEN='\033[1;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
-
-log() { echo -e "${BLUE}➤ $1${NC}" | tee -a "$LOGFILE"; }
-ok() { echo -e "${GREEN}✔ $1${NC}" | tee -a "$LOGFILE"; }
-warn() { echo -e "${YELLOW}⚠ $1${NC}" | tee -a "$LOGFILE"; }
-fail() {
-    echo -e "${RED}✖ $1${NC}" | tee -a "$LOGFILE"
-    exit 1
-}
-
-log "🔧 Starting system setup for Arch/Manjaro..."
+section "🔧 Starting System Setup for Arch/Manjaro"
 
 # === Update Pacman Mirrors ===
 log "📡 Updating pacman mirrors..."
-sudo pacman-mirrors --fasttrack || warn "Mirror update failed (non-fatal)"
+if ! sudo pacman-mirrors --fasttrack; then
+    warn "Mirror update failed (non-fatal)"
+fi
 
 # === fstrim.timer ===
 log "🧼 Checking fstrim.timer status..."
-if sudo systemctl is-enabled fstrim.timer &>/dev/null; then
+if systemctl is-enabled fstrim.timer &>/dev/null; then
     ok "fstrim.timer is enabled"
 else
-    warn "fstrim.timer is not enabled (tip: sudo systemctl enable --now fstrim.timer)"
+    warn "fstrim.timer is not enabled. You can run: sudo systemctl enable --now fstrim.timer"
 fi
 
-# === Swappiness ===
+# === Swappiness Tuning ===
 SWAPPINESS_VALUE=10
-log "⚙️ Checking current swappiness..."
-CURRENT=$(cat /proc/sys/vm/swappiness)
-echo "Current: $CURRENT" | tee -a "$LOGFILE"
+CURRENT=$(< /proc/sys/vm/swappiness)
+log "⚙️ Current swappiness: $CURRENT"
 
 if [[ "$CURRENT" -ne "$SWAPPINESS_VALUE" ]]; then
     log "Updating swappiness to $SWAPPINESS_VALUE..."
     echo "vm.swappiness=$SWAPPINESS_VALUE" | sudo tee /etc/sysctl.d/99-swappiness.conf >/dev/null
-    sudo sysctl -p /etc/sysctl.d/99-swappiness.conf || warn "Failed to apply swappiness"
-    ok "Swappiness updated"
+    if sudo sysctl -p /etc/sysctl.d/99-swappiness.conf; then
+        ok "Swappiness updated to $SWAPPINESS_VALUE"
+    else
+        warn "Failed to apply new swappiness value"
+    fi
 else
     ok "Swappiness already set to $SWAPPINESS_VALUE"
 fi
 
-# === Install UFW + GUFW ===
-log "🛡️ Installing firewall (UFW + GUFW)..."
-sudo pacman -S --noconfirm ufw gufw || fail "UFW install failed"
+# === UFW Firewall ===
+log "🛡️ Installing UFW and GUFW..."
+if sudo pacman -S --noconfirm --needed ufw gufw; then
+    ok "UFW and GUFW installed"
+else
+    fail "Failed to install UFW/GUFW"
+fi
 
-log "🔐 Enabling UFW..."
-sudo ufw enable || fail "Failed to enable UFW"
-sudo systemctl enable --now ufw || fail "Failed to enable UFW systemd service"
-sudo ufw status verbose || warn "Could not check UFW status"
+log "🔐 Enabling and starting UFW..."
+if sudo ufw enable && sudo systemctl enable --now ufw; then
+    ok "UFW enabled and running"
+else
+    fail "Failed to start or enable UFW"
+fi
 
-# === GRUB Update (Auto) ===
+sudo ufw status verbose || warn "Could not retrieve UFW status"
+
+# === GRUB Configuration ===
 GRUB_CONF="/etc/default/grub"
-log "🛠 Updating GRUB config (quiet splash)..."
-if grep -q "GRUB_CMDLINE_LINUX_DEFAULT" "$GRUB_CONF"; then
-    sudo sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/' "$GRUB_CONF"
+log "🛠 Ensuring quiet splash is set in GRUB..."
+if grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_CONF"; then
+    sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/' "$GRUB_CONF"
 else
     echo 'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"' | sudo tee -a "$GRUB_CONF" >/dev/null
 fi
 
-log "🔄 Regenerating GRUB config..."
+log "🔄 Regenerating GRUB configuration..."
 if command -v update-grub &>/dev/null; then
     sudo update-grub
 elif command -v grub-mkconfig &>/dev/null; then
     sudo grub-mkconfig -o /boot/grub/grub.cfg
 else
-    warn "GRUB update command not found!"
+    warn "No GRUB update command found — please update manually"
 fi
-ok "GRUB updated"
+ok "GRUB configuration updated"
 
 # === Language Tools ===
-log "📘 Installing language tools..."
-sudo pacman -S --noconfirm aspell-en libmythes mythes-en languagetool || warn "Language tools install failed"
+log "📘 Installing language tools: aspell, mythes, languagetool..."
+if sudo pacman -S --noconfirm --needed aspell-en libmythes mythes-en languagetool; then
+    ok "Language tools installed"
+else
+    warn "Failed to install some language tools"
+fi
 
-ok "✅ System setup completed successfully!"
+ok "🎉 System setup completed successfully!"

@@ -1,53 +1,48 @@
 #!/bin/bash
+set -euo pipefail
 
-set -e
+# === Logger Setup ===
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../lib/lib-logger.sh"
 
-LOGDIR="$HOME/logs"
-LOGFILE="$LOGDIR/mariadb_setup.log"
-mkdir -p "$LOGDIR"
+section "📦 Starting MariaDB setup..."
 
-log() { echo "$(date '+%F %T') | $1" | tee -a "$LOGFILE"; }
-log_error() {
-    echo "$(date '+%F %T') | ❌ ERROR: $1" | tee -a "$LOGFILE"
-    exit 1
-}
-
-log "📦 Starting MariaDB setup..."
-
-# === Install MariaDB ===
-log "Installing MariaDB..."
+# === 1. Install MariaDB ===
+log "📥 Installing MariaDB..."
 if ! sudo pacman -S --needed --noconfirm mariadb; then
-    log_error "Failed to install MariaDB."
+    fail "Failed to install MariaDB."
 fi
+ok "MariaDB installed."
 
-# === Initialize MariaDB ===
-log "Initializing MariaDB..."
+# === 2. Initialize Database ===
+log "🛠️ Initializing MariaDB data directory..."
 if ! sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql; then
-    log_error "Failed to initialize MariaDB."
+    fail "MariaDB initialization failed."
 fi
+ok "MariaDB initialized."
 
-# === Enable & Start Service ===
-log "Enabling MariaDB systemd service..."
+# === 3. Enable + Start Service ===
+log "🚀 Enabling and starting mariadb.service..."
 if ! sudo systemctl enable --now mariadb; then
-    log_error "Failed to enable and start MariaDB service."
+    fail "Failed to enable/start mariadb.service"
 fi
 
-# === Verify Service ===
-log "Checking if MariaDB service is running..."
+# === 4. Verify Service ===
+log "🔍 Verifying service status..."
 if ! sudo systemctl is-active --quiet mariadb; then
     sudo systemctl status mariadb | tee -a "$LOGFILE"
-    log_error "MariaDB service is not active."
+    fail "MariaDB service is not running."
 fi
-log "✅ MariaDB service is active."
+ok "MariaDB is running."
 
-# === Secure MariaDB (semi-auto) ===
-log "🛡️ Running secure MariaDB installation..."
+# === 5. Secure Installation (Interactive) ===
+section "🛡️ Secure MariaDB Installation (manual step)"
 
-echo -e "\n⚠️ NOTE: The next step is interactive. Please complete the MariaDB secure setup manually."
-echo "    You can automate this later using expect, but it's safer to run it once manually."
+echo -e "\n${YELLOW}⚠️  NOTE: The following step is interactive.${NC}"
+echo -e "   It's recommended to complete it manually the first time.\n"
 
 if ! sudo mariadb-secure-installation; then
-    log_error "Secure installation failed."
+    fail "Secure installation failed."
 fi
 
-log "🎉 MariaDB setup completed successfully!"
+ok "🎉 MariaDB setup completed successfully!"
