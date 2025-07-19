@@ -99,37 +99,31 @@ export PATH="\$HOME/.config/composer/vendor/bin:\$PATH"
 alias clean-npm='rm -rf node_modules package-lock.json && npm install'
 alias clean-composer='rm -rf vendor composer.lock && composer install'
 
-php-cs-fixer() {
-    if [ -x vendor/bin/php-cs-fixer ]; then
-        ./vendor/bin/php-cs-fixer "\$@"
-    else
-        echo "php-cs-fixer not found in vendor/bin"
-    fi
-}
+vbin() {
+    local bin="./vendor/bin/$1"
+    shift
 
-pint() {
-    if [ -x vendor/bin/pint ]; then
-        ./vendor/bin/pint "\$@"
+    if [ -x "$bin" ]; then
+        "$bin" "$@"
     else
-        echo "pint not found in vendor/bin"
+        echo "🔴 '$1' not found or not executable in vendor/bin"
     fi
 }
 
 artisan() {
     if [ -f artisan ]; then
-        php artisan "\$@"
+        php artisan "$@"
     else
-        echo "artisan file not found"
+        echo "🔴 artisan file not found"
     fi
 }
 
-sail() {
-    if [ -x vendor/bin/sail ]; then
-        ./vendor/bin/sail "\$@"
-    else
-        echo "sail not found in vendor/bin"
-    fi
-}
+# Optional Aliases
+alias pint='vbin pint'
+alias sail='vbin sail'
+alias fixer='vbin php-cs-fixer'
+alias pest='vbin pest'
+alias phpunit='vbin phpunit'
 EOL
 
 ok "Custom aliases and functions added to .zshrc"

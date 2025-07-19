@@ -26,10 +26,29 @@ php_packages=(
 )
 
 echo "📦 Installing PHP and required extensions..." | tee -a "$LOGFILE"
-if ! sudo pacman -S --noconfirm "${php_packages[@]}"; then
-    log_error "Failed to install PHP packages"
+
+for pkg in "${php_packages[@]}"; do
+    if pacman -Qi "$pkg" &>/dev/null; then
+        log_ok "$pkg is already installed."
+        continue
+    fi
+
+    if sudo pacman -S --noconfirm --needed "$pkg"; then
+        log_ok "Installed $pkg"
+    else
+        echo "Skipped $pkg (not found or failed)" | tee -a "$LOGFILE"
+    fi
+done
+
+log_ok "Finished installing PHP packages (some may be missing)."
+
+# ===== NVM (Node Version Manager) via pacman =====
+echo "📦 Installing NVM via pacman..." | tee -a "$LOGFILE"
+if ! pacman -Qi nvm &>/dev/null; then
+    sudo pacman -S --noconfirm nvm || log_error "Failed to install nvm"
+else
+    log_ok "nvm is already installed via pacman."
 fi
-log_ok "PHP packages installed."
 
 # ===== Node.js & NPM =====
 echo "📦 Installing Node.js and NPM..." | tee -a "$LOGFILE"
@@ -102,3 +121,33 @@ fi
 log_ok "Composer and Valet verified."
 
 echo "🎉 PHP, Composer, and Valet setup completed successfully!" | tee -a "$LOGFILE"
+
+# ===== PHP Local Performance Tweaks =====
+CUSTOM_INI_PATH="/etc/php/conf.d/custom.ini"
+
+echo "⚙️ Writing PHP custom.ini for performance..." | tee -a "$LOGFILE"
+sudo tee "$CUSTOM_INI_PATH" >/dev/null <<EOF
+; Performance tweaks for local development
+
+opcache.enable=1
+opcache.enable_cli=1
+opcache.memory_consumption=128
+opcache.interned_strings_buffer=16
+opcache.max_accelerated_files=10000
+opcache.revalidate_freq=0
+opcache.fast_shutdown=1
+
+realpath_cache_size=4096K
+realpath_cache_ttl=600
+
+memory_limit=512M
+max_execution_time=300
+upload_max_filesize=64M
+post_max_size=64M
+EOF
+
+log_ok "custom.ini written to $CUSTOM_INI_PATH"
+
+echo "🔄 Restarting php-fpm to apply changes..." | tee -a "$LOGFILE"
+sudo systemctl restart php-fpm.service || log_error "Failed to restart php-fpm"
+log_ok "php-fpm restarted with new PHP config."

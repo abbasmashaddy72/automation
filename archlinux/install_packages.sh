@@ -57,61 +57,47 @@ install_package() {
 # === Package Lists ===
 
 pacman_packages=(
+    android-tools
+    brave-browser
+    curl
     dbeaver
     deluge-gtk
-    firefox-developer-edition
     firefox
-    handbrake
-    keepassxc
-    libreoffice-fresh
-    meld
-    virtualbox
-    pycharm-community-edition
-    scrcpy
-    remmina
-    vlc
-    timeshift
-    android-tools
-    mariadb
-    tree
-    zip
-    unzip
-    brave-browser
-    ventoy
-    curl
-    cpu-checker
-    kvm-ok
-    linux-headers
-    virtualbox-guest-utils
-    libimobiledevice
-    ifuse
-    usbmuxd
+    firefox-developer-edition
+    freerdp
     gvfs-afc
+    ifuse
+    intellij-idea-community-edition
+    keepassxc
+    libimobiledevice
+    meld
+    onlyoffice-desktopeditors
+    peek
+    pycharm-community-edition
+    remmina
+    scrcpy
+    thunderbird
+    tree
+    unzip
+    usbmuxd
+    ventoy
+    virtualbox
+    virtualbox-guest-iso
+    virtualbox-guest-utils
+    vlc
+    zip
 )
 
 pamac_packages=(
     android-studio
-    anydesk
-    docker-desktop
-    ferdium-bin
+    anydesk-bin
+    ferdium
     google-chrome
+    postman-bin
     visual-studio-code-bin
+    void-bin
     winscp
-    balena-etcher
-    sublime-text-4
-    woeusb
 )
-
-# === Zed.dev Installer ===
-install_zed() {
-    if ! command -v zed &>/dev/null; then
-        log "🧪 Installing Zed.dev..."
-        curl -fsSL https://zed.dev/install.sh | sh || log_error "Zed.dev installation failed"
-        log "✅ Zed.dev installed successfully"
-    else
-        log "✅ Zed.dev already installed"
-    fi
-}
 
 # === Install Packages ===
 
@@ -133,8 +119,5 @@ if command -v pamac &>/dev/null; then
 else
     log_error "Pamac is not installed. Skipping AUR packages."
 fi
-
-# === Zed.dev ===
-install_zed
 
 log "🎉 Package installation complete!"
