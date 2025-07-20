@@ -17,14 +17,12 @@ source "$SCRIPT_DIR/../lib/lib-logger.sh"
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
 section "📦 System package installation for $PLATFORM_STRING"
-
 ensure_supported_platform arch manjaro
 
 # === Command-Line Flags ===
 SILENT="${SILENT:-0}"
 DEBUG="${DEBUG:-0}"
 
-# --- Track package install results ---
 declare -a installed_packages already_present failed_packages
 
 # === Install Helpers ===
@@ -32,22 +30,24 @@ is_installed_pacman() { pacman -Qi "$1" &>/dev/null; }
 is_installed_pamac() { pamac list --installed "$1" &>/dev/null; }
 
 install_with_pacman() {
-    if sudo pacman -S --needed --noconfirm "$1"; then
-        installed_packages+=("$1")
-        ok "$1 installed (pacman)"
+    local pkg="$1"
+    if sudo pacman -S --needed --noconfirm "$pkg"; then
+        installed_packages+=("$pkg")
+        ok "$pkg installed (pacman)"
     else
-        failed_packages+=("$1")
-        warn "Failed to install $1 via pacman"
+        failed_packages+=("$pkg")
+        warn "Failed to install $pkg via pacman"
     fi
 }
 
 install_with_pamac() {
-    if pamac install --no-confirm "$1"; then
-        installed_packages+=("$1")
-        ok "$1 installed (pamac)"
+    local pkg="$1"
+    if pamac install --no-confirm "$pkg"; then
+        installed_packages+=("$pkg")
+        ok "$pkg installed (pamac)"
     else
-        failed_packages+=("$1")
-        warn "Failed to install $1 via pamac"
+        failed_packages+=("$pkg")
+        warn "Failed to install $pkg via pamac"
     fi
 }
 
@@ -68,6 +68,9 @@ install_package() {
         else
             install_with_pamac "$package"
         fi
+    else
+        failed_packages+=("$package")
+        warn "Unknown package manager: $manager for $package"
     fi
 }
 
@@ -135,6 +138,7 @@ if [[ $# -gt 0 ]]; then
             install_package "$pkg" "pamac"
         else
             warn "Unknown package: $pkg"
+            failed_packages+=("$pkg")
         fi
     done
 else
@@ -156,10 +160,8 @@ fi
 
 # === Final Summary ===
 section "📊 Installation Summary"
-
 [[ ${#installed_packages[@]} -gt 0 ]] && log "🟢 Newly installed: ${installed_packages[*]}"
 [[ ${#already_present[@]} -gt 0 ]] && log "🟡 Already present: ${already_present[*]}"
 [[ ${#failed_packages[@]} -gt 0 ]] && warn "🔴 Failed to install: ${failed_packages[*]}"
 
 ok "🎉 All requested system packages processed for $PLATFORM_STRING!"
-
