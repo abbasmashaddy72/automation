@@ -3,13 +3,23 @@ set -euo pipefail
 
 # === Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
+    echo "Logger library not found! Exiting." >&2
+    exit 1
+fi
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
+    echo "Platform library not found! Exiting." >&2
+    exit 1
+fi
+
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
-section "📦 Starting Git setup for $PLATFORM_STRING"
-
 # === Distro check: Only run on supported systems ===
 ensure_supported_platform arch manjaro
+
+section "📦 Starting Git setup for $PLATFORM_STRING"
 
 # === Check Git Installation (Pacman first) ===
 if ! command -v git &>/dev/null; then
@@ -45,6 +55,7 @@ done
 
 # === Backup Existing .gitconfig ===
 GITCONFIG="$HOME/.gitconfig"
+backup=""
 if [[ -f "$GITCONFIG" ]]; then
     backup="$GITCONFIG.backup.$(date +%Y%m%d%H%M%S)"
     cp "$GITCONFIG" "$backup"
@@ -84,4 +95,6 @@ git config --list | tee -a "$LOGFILE"
 
 ok "🎉 Git setup complete!"
 
-warn "To rollback your git config: mv $backup $GITCONFIG" || true
+if [[ -n "$backup" ]]; then
+    warn "To rollback your git config: mv $backup $GITCONFIG" || true
+fi

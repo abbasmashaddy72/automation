@@ -5,14 +5,13 @@ set -euo pipefail
 
 # === Setup Log Directory ===
 LOGDIR="${LOGDIR:-$HOME/logs}"
-
 if [[ ! -d "$LOGDIR" ]]; then
     mkdir -p "$LOGDIR" || { echo "✖ Failed to create log directory: $LOGDIR" >&2; exit 1; }
 fi
 
 # === Auto-determine log file unless explicitly set ===
 if [[ -z "${LOGFILE:-}" ]]; then
-    # Handle cases where BASH_SOURCE[1] may not exist (when sourced from CLI)
+    # If BASH_SOURCE[1] not set, default to 'script'
     if [[ ${#BASH_SOURCE[@]} -gt 1 && -n "${BASH_SOURCE[1]}" ]]; then
         CALLER_NAME="$(basename "${BASH_SOURCE[1]%.*}")"
     else
@@ -40,6 +39,18 @@ timestamp() {
     date '+%Y-%m-%d %H:%M:%S'
 }
 
+# === Log rotation (before any writes) ===
+LOG_MAX_SIZE=${LOG_MAX_SIZE:-1048576}
+if [[ -f "$LOGFILE" && $(stat -c%s "$LOGFILE") -ge $LOG_MAX_SIZE ]]; then
+    mv "$LOGFILE" "$LOGFILE.$(date '+%Y%m%d%H%M%S')"
+fi
+
+# === Ensure log file is writable ===
+if ! touch "$LOGFILE" &>/dev/null; then
+    echo "✖ Cannot write to log file: $LOGFILE" >&2
+    exit 1
+fi
+
 # === Logger Functions ===
 log() {
     [[ "$VERBOSE" -ge 1 ]] && echo -e "$(timestamp) ${BLUE}➤ $*${NC}" | tee -a "$LOGFILE"
@@ -62,13 +73,7 @@ section() {
 log_success() { ok "$@"; }
 log_error()   { fail "$@"; }
 
-# === Debug Helper ===
+# === Debug Helper (prints always if DEBUG=1) ===
 debug() {
     [[ "${DEBUG:-0}" == "1" ]] && echo -e "$(timestamp) ${YELLOW}[DEBUG] $*${NC}" | tee -a "$LOGFILE"
 }
-
-# === Log File Permission Check ===
-if ! touch "$LOGFILE" &>/dev/null; then
-    echo "✖ Cannot write to log file: $LOGFILE" >&2
-    exit 1
-fi

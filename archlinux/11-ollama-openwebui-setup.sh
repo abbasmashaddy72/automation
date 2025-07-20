@@ -3,15 +3,27 @@ set -euo pipefail
 
 # === Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
+    echo "Logger library not found! Exiting." >&2
+    exit 1
+fi
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
+    echo "Platform library not found! Exiting." >&2
+    exit 1
+fi
+
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
-section "🚀 Starting setup of Ollama + Open WebUI for $PLATFORM_STRING"
+# === Distro Check: Only Supported Platforms ===
 ensure_supported_platform arch manjaro
+section "🚀 Starting setup of Ollama + Open WebUI for $PLATFORM_STRING"
 
-# === Parse args ===
+# === Args & Defaults ===
 DEFAULT_MODEL="${OLLAMA_MODEL:-deepseek-coder-v2:16b}"
 OPENWEBUI_PORT="${OPENWEBUI_PORT:-3000}"
+UNINSTALL=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -22,7 +34,7 @@ for arg in "$@"; do
 done
 
 # === Uninstall Option ===
-if [[ "${UNINSTALL:-0}" == "1" ]]; then
+if [[ "$UNINSTALL" == "1" ]]; then
     section "🧹 Uninstalling Ollama and Open WebUI Docker setup"
     docker rm -f open-webui &>/dev/null || warn "No open-webui container to remove"
     docker volume rm open-webui &>/dev/null || warn "No open-webui volume to remove"
@@ -33,7 +45,7 @@ if [[ "${UNINSTALL:-0}" == "1" ]]; then
     exit 0
 fi
 
-# === 1. Install Docker ===
+# === Ensure Docker Installed & Started ===
 if ! command -v docker &>/dev/null; then
     log "📦 Installing Docker..."
     sudo pacman -S --noconfirm --needed docker || fail "Failed to install Docker"
@@ -43,26 +55,25 @@ else
     ok "Docker already installed"
 fi
 
-# === 2. Docker Group Handling ===
+# === Docker Group Handling (must logout/login if added) ===
 if ! groups "$USER" | grep -qw docker; then
     sudo usermod -aG docker "$USER"
     warn "Added $USER to docker group. You *must log out and log in* for this to take effect. Exiting."
     exit 1
 fi
 
-# === 3. Install Ollama ===
+# === Install Ollama ===
 if ! command -v ollama &>/dev/null; then
-    log "📦 Installing Ollama..."
+    log "📦 Installing Ollama (from official script)..."
     curl -fsSL https://ollama.com/install.sh | sh || fail "Ollama installation failed"
     ok "Ollama installed"
 else
     ok "Ollama already installed"
 fi
 
-# === 4. Set Ollama to listen on all interfaces ===
+# === Set Ollama to listen on all interfaces ===
 SERVICE_FILE="/etc/systemd/system/ollama.service"
 ENV_LINE='Environment="OLLAMA_HOST=0.0.0.0"'
-
 if [[ -f "$SERVICE_FILE" ]] && ! grep -q 'OLLAMA_HOST=0.0.0.0' "$SERVICE_FILE"; then
     log "🔧 Configuring OLLAMA_HOST in $SERVICE_FILE..."
     sudo sed -i "/^Environment=/a $ENV_LINE" "$SERVICE_FILE" || fail "Failed to update $SERVICE_FILE"
@@ -72,7 +83,7 @@ if [[ -f "$SERVICE_FILE" ]] && ! grep -q 'OLLAMA_HOST=0.0.0.0' "$SERVICE_FILE"; 
     ok "OLLAMA_HOST configured and service restarted"
 fi
 
-# === 5. Start Ollama if not running ===
+# === Ensure Ollama running on port 11434 ===
 if ! ss -tuln | grep -q ':11434'; then
     log "▶️ Starting Ollama manually..."
     sudo pkill ollama || true
@@ -84,7 +95,7 @@ else
     ok "Ollama already running on port 11434"
 fi
 
-# === 6. Run Open WebUI ===
+# === Run Open WebUI ===
 log "🐳 Running Open WebUI Docker container on port $OPENWEBUI_PORT..."
 docker rm -f open-webui &>/dev/null || true
 
@@ -100,12 +111,12 @@ docker run -d \
 ok "Open WebUI is running at http://localhost:$OPENWEBUI_PORT"
 log "🧠 Ollama is accessible at http://localhost:11434"
 
-# === 7. Health Check ===
+# === Health Check ===
 log "🔎 Checking Open WebUI status..."
 sleep 2
 curl --silent --fail http://localhost:$OPENWEBUI_PORT &>/dev/null && ok "Open WebUI is responding" || fail "Open WebUI is not responding"
 
-# === 8. Pull Default Model ===
+# === Pull Default Model ===
 log "📥 Pulling Ollama model: $DEFAULT_MODEL..."
 if ollama list | grep -q "$DEFAULT_MODEL"; then
     ok "$DEFAULT_MODEL already pulled"

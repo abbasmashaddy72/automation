@@ -3,11 +3,22 @@ set -euo pipefail
 
 # === Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
+    echo "Logger library not found! Exiting." >&2
+    exit 1
+fi
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
+    echo "Platform library not found! Exiting." >&2
+    exit 1
+fi
+
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
-section "📦 PHP, Composer, and Valet Setup for $PLATFORM_STRING"
+# === Platform Guard ===
 ensure_supported_platform arch manjaro
+section "📦 PHP, Composer, and Valet Setup for $PLATFORM_STRING"
 
 # === Uninstall Option ===
 if [[ "${1:-}" == "--uninstall" ]]; then
@@ -21,35 +32,28 @@ if [[ "${1:-}" == "--uninstall" ]]; then
     exit 0
 fi
 
-# === Helper: Parse PHP Version Argument (default: php) ===
-PHP_VERSION="${1:-php}"
-PHP_FPM_SERVICE="${PHP_VERSION}-fpm"
-if [[ "$PHP_VERSION" != "php" ]]; then
-    PHP_FPM_SERVICE="php${PHP_VERSION/./}-fpm"
-fi
-
 # === Modular Steps ===
 
 install_php() {
-    section "📥 Installing PHP and extensions ($PHP_VERSION)"
+    section "📥 Installing PHP and extensions"
     local pkgs=(
-        $PHP_VERSION
-        ${PHP_VERSION}-apcu
-        ${PHP_VERSION}-fpm
-        ${PHP_VERSION}-gd
-        ${PHP_VERSION}-iconv
-        ${PHP_VERSION}-intl
-        ${PHP_VERSION}-json
-        ${PHP_VERSION}-mbstring
-        ${PHP_VERSION}-openssl
-        ${PHP_VERSION}-pdo-mysql
-        ${PHP_VERSION}-redis
-        ${PHP_VERSION}-sqlite
-        ${PHP_VERSION}-tokenizer
-        ${PHP_VERSION}-xdebug
-        ${PHP_VERSION}-xml
-        ${PHP_VERSION}-zip
-        ${PHP_VERSION}-pdo
+        php
+        php-apcu
+        php-fpm
+        php-gd
+        php-iconv
+        php-intl
+        php-json
+        php-mbstring
+        php-openssl
+        php-pdo-mysql
+        php-redis
+        php-sqlite
+        php-tokenizer
+        php-xdebug
+        php-xml
+        php-zip
+        php-pdo
     )
     for pkg in "${pkgs[@]}"; do
         if pacman -Qi "$pkg" &>/dev/null; then
@@ -112,12 +116,12 @@ install_valet_deps() {
 }
 
 enable_php_fpm() {
-    section "🛠 Enabling $PHP_FPM_SERVICE"
-    if systemctl list-units --all | grep -q "$PHP_FPM_SERVICE.service"; then
-        sudo systemctl enable --now "$PHP_FPM_SERVICE.service" || fail "$PHP_FPM_SERVICE service failed"
-        ok "$PHP_FPM_SERVICE is active"
+    section "🛠 Enabling php-fpm"
+    if systemctl list-units --all | grep -q "php-fpm.service"; then
+        sudo systemctl enable --now php-fpm.service || fail "php-fpm service failed"
+        ok "php-fpm is active"
     else
-        fail "$PHP_FPM_SERVICE.service not found. Was $PHP_FPM_SERVICE installed?"
+        fail "php-fpm.service not found. Was php-fpm installed?"
     fi
 }
 
@@ -156,9 +160,9 @@ final_checks() {
 }
 
 restart_php_fpm() {
-    log "🔄 Restarting $PHP_FPM_SERVICE..."
-    sudo systemctl restart "$PHP_FPM_SERVICE.service" || fail "Failed to restart $PHP_FPM_SERVICE"
-    ok "$PHP_FPM_SERVICE restarted successfully"
+    log "🔄 Restarting php-fpm..."
+    sudo systemctl restart php-fpm.service || fail "Failed to restart php-fpm"
+    ok "php-fpm restarted successfully"
 }
 
 # === Main Flow ===
@@ -173,4 +177,4 @@ write_custom_php_ini
 restart_php_fpm
 final_checks
 
-ok "🎉 PHP ($PHP_VERSION) + Composer + Valet setup completed!"
+ok "🎉 PHP + Composer + Valet setup completed!"

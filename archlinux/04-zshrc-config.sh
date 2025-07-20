@@ -10,6 +10,16 @@ RESTORE=false
 
 # === Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
+    echo "Logger library not found! Exiting." >&2
+    exit 1
+fi
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
+    echo "Platform library not found! Exiting." >&2
+    exit 1
+fi
+
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 

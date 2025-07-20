@@ -24,27 +24,33 @@ PLATFORM_STRING="$OS_ID ($OS_NAME) / $ARCH"
 
 # Usage: ensure_supported_platform arch manjaro
 ensure_supported_platform() {
-    local ok=false
-    for distro in "$@"; do
-        if [[ "$OS_ID" == "$distro" ]]; then
-            ok=true
+    local target
+    for target in "$@"; do
+        if [[ "$OS_ID" == "$target" ]]; then
+            return 0
         fi
     done
-    if [[ "$ok" != true ]]; then
-        echo "✖ Unsupported platform: $OS_ID ($OS_NAME). Supported: $*"
+    # Defensive: handle if 'fail' not defined yet
+    if command -v fail &>/dev/null; then
+        fail "Unsupported platform: Detected $OS_ID ($OS_NAME), expected: $*"
+    else
+        echo "✖ Unsupported platform: Detected $OS_ID ($OS_NAME), expected: $*" >&2
         exit 1
     fi
 }
 
-# Usage: is_arch || (echo "Not arch"; exit 1)
 is_arch() { [[ "$OS_ID" == "arch" ]]; }
 is_manjaro() { [[ "$OS_ID" == "manjaro" ]]; }
 is_x86_64() { [[ "$ARCH" == "x86_64" ]]; }
 is_aarch64() { [[ "$ARCH" == "aarch64" ]]; }
 
-# === Example usage (uncomment to test) ===
-# ensure_supported_platform arch manjaro
+platform_summary() {
+    echo "Detected platform: $PLATFORM_STRING"
+}
 
 # === Export for sourced use ===
 export OS_ID OS_NAME ARCH PLATFORM_STRING
 
+# === Example usage (uncomment to test) ===
+# ensure_supported_platform arch manjaro
+# platform_summary

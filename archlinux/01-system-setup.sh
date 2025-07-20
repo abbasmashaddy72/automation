@@ -3,22 +3,34 @@ set -euo pipefail
 
 # === Include Logging & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
+    echo "Logger library not found! Exiting." >&2
+    exit 1
+fi
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
+    echo "Platform library not found! Exiting." >&2
+    exit 1
+fi
+
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
-section "🔧 Starting System Setup for $PLATFORM_STRING"
-
-# === Require Supported Platform ===
+# === Require Supported Platform ASAP ===
 ensure_supported_platform arch manjaro
 
+# Use PLATFORM_STRING only after platform check
+section "🔧 Starting System Setup for $PLATFORM_STRING"
 log "Detected platform: $PLATFORM_STRING"
 
 # === Functions for Modular Steps ===
 
 update_mirrors() {
     log "📡 Updating pacman mirrors..."
-    if ! sudo pacman-mirrors --fasttrack; then
-        warn "Mirror update failed (non-fatal)"
+    if sudo pacman-mirrors --fasttrack && sudo pacman -Sy; then
+        ok "Mirrors updated successfully."
+    else
+        fail "Mirror update failed."
     fi
 }
 
@@ -33,7 +45,7 @@ setup_fstrim() {
 }
 
 tune_swappiness() {
-    SWAPPINESS_VALUE=10
+    SWAPPINESS_VALUE=${SWAPPINESS_VALUE:-10}
     CURRENT=$(< /proc/sys/vm/swappiness)
     log "⚙️ Current swappiness: $CURRENT"
     if [[ "$CURRENT" -ne "$SWAPPINESS_VALUE" ]]; then
