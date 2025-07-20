@@ -1,48 +1,74 @@
 #!/bin/bash
 set -euo pipefail
 
-# === Include Logger ===
+# === Include Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
+source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
-section "📦 Starting system package installation..."
+section "📦 System package installation for $PLATFORM_STRING"
+
+ensure_supported_platform arch manjaro
+
+# === Command-Line Flags ===
+SILENT="${SILENT:-0}"
+DEBUG="${DEBUG:-0}"
+
+# --- Track package install results ---
+declare -a installed_packages already_present failed_packages
 
 # === Install Helpers ===
 is_installed_pacman() { pacman -Qi "$1" &>/dev/null; }
 is_installed_pamac() { pamac list --installed "$1" &>/dev/null; }
 
 install_with_pacman() {
-    log "🔹 Installing $1 (pacman)..."
-    sudo pacman -S --needed --noconfirm "$1" && ok "$1 installed" || fail "Failed to install $1 via pacman"
+    if sudo pacman -S --needed --noconfirm "$1"; then
+        installed_packages+=("$1")
+        ok "$1 installed (pacman)"
+    else
+        failed_packages+=("$1")
+        warn "Failed to install $1 via pacman"
+    fi
 }
 
 install_with_pamac() {
-    log "🔹 Installing $1 (pamac)..."
-    pamac install --no-confirm "$1" && ok "$1 installed" || fail "Failed to install $1 via pamac"
+    if pamac install --no-confirm "$1"; then
+        installed_packages+=("$1")
+        ok "$1 installed (pamac)"
+    else
+        failed_packages+=("$1")
+        warn "Failed to install $1 via pamac"
+    fi
 }
 
 install_package() {
     local package="$1"
     local manager="$2"
-
     if [[ "$manager" == "pacman" ]]; then
-        is_installed_pacman "$package" && ok "$package already installed (pacman)" || install_with_pacman "$package"
+        if is_installed_pacman "$package"; then
+            already_present+=("$package")
+            [[ "$DEBUG" == "1" ]] && ok "$package already installed (pacman)"
+        else
+            install_with_pacman "$package"
+        fi
     elif [[ "$manager" == "pamac" ]]; then
-        is_installed_pamac "$package" && ok "$package already installed (pamac)" || install_with_pamac "$package"
+        if is_installed_pamac "$package"; then
+            already_present+=("$package")
+            [[ "$DEBUG" == "1" ]] && ok "$package already installed (pamac)"
+        else
+            install_with_pamac "$package"
+        fi
     fi
 }
 
 # === Official Repository Packages ===
-
-# --- Browsers ---
 pacman_packages=(
-    brave-browser                 # Browser: No Add browser
-    firefox                       # Browser: Common browser
+    # Browsers
+    brave-browser                 # Browser: Chromium-based alternative
+    firefox                       # Browser: Mainstream open-source browser
     firefox-developer-edition     # Browser: Developer-focused browser
-)
 
-# --- Development Tools & IDEs ---
-pacman_packages+=(
+    # IDEs and Dev Tools
     dbeaver                       # Dev Tool: Database GUI
     intellij-idea-community-edition # IDE: Java development
     keepassxc                     # Dev Tool: Password manager
@@ -52,27 +78,23 @@ pacman_packages+=(
     pycharm-community-edition     # IDE: Python
     remmina                       # Dev Tool: RDP/VNC client
     thunderbird                   # Utility: Email client
-    virtualbox                    # Virtualization
-    virtualbox-guest-iso          # Virtualization
-    virtualbox-guest-utils        # Virtualization
+    virtualbox                    # Virtualization: Hypervisor
+    virtualbox-guest-iso          # Virtualization: Guest ISO support
+    virtualbox-guest-utils        # Virtualization: Guest utils
     vlc                           # Utility: Media player
-)
 
-# --- Utilities & CLI Tools ---
-pacman_packages+=(
+    # Utilities & CLI Tools
     curl                          # CLI: HTTP tool
     deluge-gtk                    # Utility: Torrent client
-    freerdp                       # Utility: Remote desktop
+    freerdp                       # Utility: Remote desktop protocol
     scrcpy                        # Utility: Android screen mirroring
     tree                          # CLI: Directory tree viewer
     unzip                         # CLI: Archive extractor
     usbmuxd                       # iOS: USB communication
     ventoy                        # Utility: Bootable USB creator
     zip                           # CLI: Archive compressor
-)
 
-# --- Mobile / iOS Development ---
-pacman_packages+=(
+    # Mobile / iOS Development
     android-tools                 # Mobile: adb, fastboot
     gvfs-afc                      # iOS: iDevice mounter
     ifuse                         # iOS: FUSE for Apple devices
@@ -80,8 +102,6 @@ pacman_packages+=(
 )
 
 # === AUR / Pamac Packages ===
-
-# --- AUR Applications ---
 pamac_packages=(
     android-studio                # IDE: Android development
     anydesk-bin                   # Utility: Remote desktop
@@ -93,20 +113,43 @@ pamac_packages=(
     winscp                        # Utility: SFTP client
 )
 
-# === Install Pacman Packages ===
-section "📦 Installing official (pacman) packages..."
-for package in "${pacman_packages[@]}"; do
-    install_package "$package" "pacman"
-done
-
-# === Install AUR (Pamac) Packages ===
-section "📦 Installing AUR (pamac) packages..."
-if command -v pamac &>/dev/null; then
-    for package in "${pamac_packages[@]}"; do
-        install_package "$package" "pamac"
+# === Package Parameterization ===
+if [[ $# -gt 0 ]]; then
+    # If args provided, install only those packages (find in either array)
+    section "🎯 Installing requested packages: $*"
+    targets=("$@")
+    for pkg in "${targets[@]}"; do
+        if [[ " ${pacman_packages[*]} " == *" $pkg "* ]]; then
+            install_package "$pkg" "pacman"
+        elif [[ " ${pamac_packages[*]} " == *" $pkg "* ]]; then
+            install_package "$pkg" "pamac"
+        else
+            warn "Unknown package: $pkg"
+        fi
     done
 else
-    warn "⚠ pamac is not installed. Skipping AUR packages."
+    # Default: install everything
+    section "📦 Installing official (pacman) packages..."
+    for package in "${pacman_packages[@]}"; do
+        install_package "$package" "pacman"
+    done
+
+    section "📦 Installing AUR (pamac) packages..."
+    if command -v pamac &>/dev/null; then
+        for package in "${pamac_packages[@]}"; do
+            install_package "$package" "pamac"
+        done
+    else
+        warn "⚠ pamac is not installed. Skipping AUR packages."
+    fi
 fi
 
-ok "🎉 All system packages installed!"
+# === Final Summary ===
+section "📊 Installation Summary"
+
+[[ ${#installed_packages[@]} -gt 0 ]] && log "🟢 Newly installed: ${installed_packages[*]}"
+[[ ${#already_present[@]} -gt 0 ]] && log "🟡 Already present: ${already_present[*]}"
+[[ ${#failed_packages[@]} -gt 0 ]] && warn "🔴 Failed to install: ${failed_packages[*]}"
+
+ok "🎉 All requested system packages processed for $PLATFORM_STRING!"
+

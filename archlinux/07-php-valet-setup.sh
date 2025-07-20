@@ -1,108 +1,130 @@
 #!/bin/bash
 set -euo pipefail
 
-# === Logger Setup ===
+# === Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
+source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
-section "📦 PHP, Composer, and Valet Setup"
+section "📦 PHP, Composer, and Valet Setup for $PLATFORM_STRING"
+ensure_supported_platform arch manjaro
 
-# === PHP Packages ===
-php_packages=(
-    php
-    php-apcu
-    php-fpm
-    php-gd
-    php-iconv
-    php-intl
-    php-json
-    php-mbstring
-    php-openssl
-    php-pdo-mysql
-    php-redis
-    php-sqlite
-    php-tokenizer
-    php-xdebug
-    php-xml
-    php-zip
-    php-pdo
-)
+# === Uninstall Option ===
+if [[ "${1:-}" == "--uninstall" ]]; then
+    section "🧹 Uninstalling PHP, Composer, Valet..."
+    sudo systemctl stop php-fpm || warn "php-fpm was not running"
+    sudo systemctl disable php-fpm || warn "php-fpm was not enabled"
+    sudo pacman -Rs --noconfirm composer php php-fpm || warn "Could not remove PHP/Composer"
+    composer global remove cpriego/valet-linux || warn "Could not remove Valet"
+    sudo rm -f /etc/php/conf.d/custom.ini || warn "Could not remove custom PHP ini"
+    ok "PHP, Composer, and Valet have been uninstalled."
+    exit 0
+fi
 
-log "📥 Installing PHP and extensions..."
-for pkg in "${php_packages[@]}"; do
-    if pacman -Qi "$pkg" &>/dev/null; then
-        ok "$pkg is already installed."
+# === Helper: Parse PHP Version Argument (default: php) ===
+PHP_VERSION="${1:-php}"
+PHP_FPM_SERVICE="${PHP_VERSION}-fpm"
+if [[ "$PHP_VERSION" != "php" ]]; then
+    PHP_FPM_SERVICE="php${PHP_VERSION/./}-fpm"
+fi
+
+# === Modular Steps ===
+
+install_php() {
+    section "📥 Installing PHP and extensions ($PHP_VERSION)"
+    local pkgs=(
+        $PHP_VERSION
+        ${PHP_VERSION}-apcu
+        ${PHP_VERSION}-fpm
+        ${PHP_VERSION}-gd
+        ${PHP_VERSION}-iconv
+        ${PHP_VERSION}-intl
+        ${PHP_VERSION}-json
+        ${PHP_VERSION}-mbstring
+        ${PHP_VERSION}-openssl
+        ${PHP_VERSION}-pdo-mysql
+        ${PHP_VERSION}-redis
+        ${PHP_VERSION}-sqlite
+        ${PHP_VERSION}-tokenizer
+        ${PHP_VERSION}-xdebug
+        ${PHP_VERSION}-xml
+        ${PHP_VERSION}-zip
+        ${PHP_VERSION}-pdo
+    )
+    for pkg in "${pkgs[@]}"; do
+        if pacman -Qi "$pkg" &>/dev/null; then
+            ok "$pkg already installed."
+        else
+            sudo pacman -S --needed --noconfirm "$pkg" || warn "❌ Failed or skipped: $pkg"
+            ok "Installed $pkg"
+        fi
+    done
+}
+
+install_nvm_node() {
+    log "📥 Installing NVM, Node.js & npm..."
+    sudo pacman -S --noconfirm --needed nvm nodejs npm || fail "Failed to install NVM, Node.js, NPM"
+    ok "NVM, Node.js, NPM installed"
+}
+
+install_composer() {
+    if command -v composer &>/dev/null; then
+        ok "Composer already installed"
     else
-        sudo pacman -S --needed --noconfirm "$pkg" || warn "❌ Failed or skipped: $pkg"
-        ok "Installed $pkg"
+        log "📥 Installing Composer..."
+        sudo pacman -S --noconfirm --needed composer || fail "Failed to install Composer"
+        ok "Composer installed"
     fi
-done
+}
 
-# === Install NVM ===
-log "📥 Installing NVM..."
-if ! pacman -Qi nvm &>/dev/null; then
-    sudo pacman -S --noconfirm nvm || fail "Failed to install nvm"
-else
-    ok "nvm already installed"
-fi
+add_composer_bin_to_path() {
+    ZSHRC="$HOME/.zshrc"
+    COMPOSER_LINE='export PATH="$HOME/.config/composer/vendor/bin:$PATH"'
+    log "🔧 Ensuring Composer bin is in PATH..."
 
-# === Node.js & NPM ===
-log "📥 Installing Node.js & npm..."
-sudo pacman -S --noconfirm nodejs npm || fail "Failed to install Node.js & NPM"
-ok "Node.js and NPM installed"
+    if ! grep -Fxq "$COMPOSER_LINE" "$ZSHRC"; then
+        # Backup .zshrc first!
+        backup="$ZSHRC.backup.$(date +%Y%m%d%H%M%S)"
+        cp "$ZSHRC" "$backup" && ok "Backed up .zshrc to $backup"
+        echo "$COMPOSER_LINE" >>"$ZSHRC"
+        ok "Composer bin path added to .zshrc"
+    else
+        warn "Composer bin path already exists in .zshrc"
+    fi
+}
 
-# === Composer ===
-log "📥 Installing Composer..."
-sudo pacman -S --noconfirm composer || fail "Failed to install Composer"
-ok "Composer installed"
+install_valet() {
+    export COMPOSER_HOME="$HOME/.config/composer"
+    export PATH="$HOME/.config/composer/vendor/bin:$PATH"
+    if command -v valet &>/dev/null; then
+        ok "Valet already installed"
+    else
+        composer global require cpriego/valet-linux || fail "Failed to install valet-linux"
+        ok "Valet installed globally"
+    fi
+}
 
-# === Add Composer bin to PATH in .zshrc ===
-ZSHRC="$HOME/.zshrc"
-COMPOSER_LINE='export PATH="$HOME/.config/composer/vendor/bin:$PATH"'
-log "🔧 Ensuring Composer bin is in PATH..."
+install_valet_deps() {
+    local valet_deps=(nss jq xsel networkmanager)
+    log "📥 Installing Valet dependencies..."
+    sudo pacman -S --noconfirm --needed "${valet_deps[@]}" || fail "Failed to install Valet dependencies"
+    ok "Valet dependencies installed"
+}
 
-if ! grep -q 'composer/vendor/bin' "$ZSHRC"; then
-    echo "$COMPOSER_LINE" >>"$ZSHRC"
-    ok "Composer bin path added to .zshrc"
-else
-    warn "Composer bin path already exists in .zshrc"
-fi
+enable_php_fpm() {
+    section "🛠 Enabling $PHP_FPM_SERVICE"
+    if systemctl list-units --all | grep -q "$PHP_FPM_SERVICE.service"; then
+        sudo systemctl enable --now "$PHP_FPM_SERVICE.service" || fail "$PHP_FPM_SERVICE service failed"
+        ok "$PHP_FPM_SERVICE is active"
+    else
+        fail "$PHP_FPM_SERVICE.service not found. Was $PHP_FPM_SERVICE installed?"
+    fi
+}
 
-# === Install Valet for Linux ===
-section "🚀 Installing Valet"
-
-export COMPOSER_HOME="$HOME/.config/composer"
-export PATH="$HOME/.config/composer/vendor/bin:$PATH"
-
-composer global require cpriego/valet-linux || fail "Failed to install valet-linux"
-ok "Valet installed globally"
-
-# === Valet Dependencies ===
-valet_deps=(nss jq xsel networkmanager)
-log "📥 Installing Valet dependencies..."
-sudo pacman -S --noconfirm "${valet_deps[@]}" || fail "Failed to install Valet dependencies"
-ok "Valet dependencies installed"
-
-# === Enable php-fpm ===
-section "🛠 Enabling php-fpm"
-if systemctl list-units --all | grep -q "php-fpm.service"; then
-    sudo systemctl enable --now php-fpm.service || fail "php-fpm service failed"
-    ok "php-fpm is active"
-else
-    fail "php-fpm.service not found. Was php-fpm installed?"
-fi
-
-# === Final Checks ===
-section "🧪 Verifying tools in PATH"
-command -v composer &>/dev/null || fail "Composer is not available in PATH"
-command -v valet &>/dev/null || fail "Valet is not available in PATH"
-ok "Composer and Valet available"
-
-# === PHP Custom Config ===
-section "⚙️ Writing local PHP performance settings"
-
-CUSTOM_INI="/etc/php/conf.d/custom.ini"
-sudo tee "$CUSTOM_INI" >/dev/null <<EOF
+write_custom_php_ini() {
+    section "⚙️ Writing local PHP performance settings"
+    CUSTOM_INI="/etc/php/conf.d/custom.ini"
+    sudo tee "$CUSTOM_INI" >/dev/null <<EOF
 ; Local development PHP optimizations
 
 opcache.enable=1
@@ -121,11 +143,34 @@ max_execution_time=300
 upload_max_filesize=64M
 post_max_size=64M
 EOF
+    ok "Wrote performance config to $CUSTOM_INI"
+}
 
-ok "Wrote performance config to $CUSTOM_INI"
+final_checks() {
+    section "🧪 Verifying tools in PATH"
+    command -v composer &>/dev/null || fail "Composer is not available in PATH"
+    command -v valet &>/dev/null || fail "Valet is not available in PATH"
+    php -v | tee -a "$LOGFILE"
+    valet --version | tee -a "$LOGFILE"
+    ok "Composer, Valet, and PHP verified"
+}
 
-log "🔄 Restarting php-fpm..."
-sudo systemctl restart php-fpm.service || fail "Failed to restart php-fpm"
-ok "php-fpm restarted successfully"
+restart_php_fpm() {
+    log "🔄 Restarting $PHP_FPM_SERVICE..."
+    sudo systemctl restart "$PHP_FPM_SERVICE.service" || fail "Failed to restart $PHP_FPM_SERVICE"
+    ok "$PHP_FPM_SERVICE restarted successfully"
+}
 
-ok "🎉 PHP + Composer + Valet setup completed!"
+# === Main Flow ===
+install_php
+install_nvm_node
+install_composer
+add_composer_bin_to_path
+install_valet
+install_valet_deps
+enable_php_fpm
+write_custom_php_ini
+restart_php_fpm
+final_checks
+
+ok "🎉 PHP ($PHP_VERSION) + Composer + Valet setup completed!"

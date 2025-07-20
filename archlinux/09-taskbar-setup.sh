@@ -1,46 +1,83 @@
 #!/bin/bash
 set -euo pipefail
 
-# === Logger ===
+# === Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
+source "$SCRIPT_DIR/../lib/lib-platform.sh"
+
+ensure_supported_platform arch manjaro
 
 section "📌 Auto-pinning favorite apps to KDE Task Manager"
 
-# === App names to match (case-insensitive fuzzy search) ===
-APP_NAMES=(
-    "Elisa"
-    "System Monitor"
-    "KeepassXC"
-    "Kcalc"
-    "Ferdium"
-    "AnyDesk"
-    "VirtualBox"
-    "Remmina"
-    "WinSCP"
-    "DBeaver"
-    "Thunderbird"
-    "Brave"
-    "Firefox"
-    "Chrome"
-    "Firefox Developer"
-    "Kate"
-    "Visual Studio Code"
-    "Void"
-    "Android Studio"
-    "PyCharm"
-    "IntelliJ"
-    "Postman"
-)
+# === Detect KDE/Plasma Session ===
+if [[ "${XDG_CURRENT_DESKTOP:-}" != *"KDE"* && "${DESKTOP_SESSION:-}" != *"plasma"* ]]; then
+    fail "Not a KDE Plasma session. Aborting."
+fi
 
-# === Search for .desktop entries ===
-FOUND_LAUNCHERS=()
+# === Rollback Option ===
+APPLETSRC="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
+if [[ "${1:-}" == "--uninstall" ]]; then
+    section "♻️ Restoring previous KDE taskbar backup..."
+    latest_backup=$(ls -t "$APPLETSRC.bak."* 2>/dev/null | head -n1 || true)
+    if [[ -f "$latest_backup" ]]; then
+        cp "$latest_backup" "$APPLETSRC"
+        ok "Restored KDE taskbar config from $latest_backup"
+        log "🔄 Restarting Plasma shell..."
+        kquitapp5 plasmashell || warn "Failed to quit plasmashell gracefully"
+        kstart5 plasmashell || fail "Failed to start plasmashell"
+        ok "Plasma taskbar config restored!"
+        exit 0
+    else
+        fail "No backup found to restore!"
+    fi
+fi
+
+# === App names to match (user can override via env or CLI) ===
+if [[ -n "${PIN_APPS:-}" ]]; then
+    IFS=, read -ra APP_NAMES <<< "$PIN_APPS"
+else
+    APP_NAMES=(
+        "Elisa"
+        "System Monitor"
+        "KeepassXC"
+        "Kcalc"
+        "Ferdium"
+        "AnyDesk"
+        "VirtualBox"
+        "Remmina"
+        "WinSCP"
+        "DBeaver"
+        "Thunderbird"
+        "Brave"
+        "Firefox"
+        "Chrome"
+        "Firefox Developer"
+        "Kate"
+        "Visual Studio Code"
+        "Void"
+        "Android Studio"
+        "PyCharm"
+        "IntelliJ"
+        "Postman"
+    )
+fi
+
+for arg in "$@"; do
+    case "$arg" in
+        --apps=*) IFS=, read -ra APP_NAMES <<< "${arg#*=}" ;;
+    esac
+done
+
+declare -a FOUND_LAUNCHERS PINNED
+
 log "🔍 Searching for .desktop launchers..."
 for name in "${APP_NAMES[@]}"; do
     desktop_file=$(find /usr/share/applications ~/.local/share/applications -iname "*${name}*.desktop" | head -n1)
     if [[ -n "$desktop_file" ]]; then
         file_name=$(basename "$desktop_file")
         FOUND_LAUNCHERS+=("applications:${file_name}")
+        PINNED+=("$name")
         ok "Found launcher for '$name' → $file_name"
     else
         warn "No launcher found for '$name'"
@@ -51,12 +88,10 @@ if [[ ${#FOUND_LAUNCHERS[@]} -eq 0 ]]; then
     fail "No .desktop files found — aborting taskbar pinning"
 fi
 
-# === Target Plasma Applet Config ===
-APPLETSRC="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
+# === Always backup config ===
 BACKUP="$APPLETSRC.bak.$(date +%s)"
 cp "$APPLETSRC" "$BACKUP" || fail "Failed to backup plasma config"
-
-log "💾 Backed up plasma config to $BACKUP"
+ok "💾 Backed up plasma config to $BACKUP"
 
 # === Find Task Manager Configuration Section ===
 SECTION_LINE=$(grep -n "^\[Containments\].*\[Applets\].*\[Configuration\]\[General\]" "$APPLETSRC" | cut -d: -f1 | head -n1)
@@ -80,5 +115,8 @@ ok "Pinned applications updated in KDE Task Manager"
 log "🔄 Restarting Plasma shell..."
 kquitapp5 plasmashell || warn "Failed to quit plasmashell gracefully"
 kstart5 plasmashell || fail "Failed to start plasmashell"
+
+section "📋 Final Pinned Applications"
+log "🟢 Pinned: ${PINNED[*]}"
 
 ok "🎉 KDE taskbar pinned apps refreshed successfully!"

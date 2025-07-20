@@ -3,22 +3,40 @@ set -euo pipefail
 
 # === CONFIG ===
 ZSHRC="$HOME/.zshrc"
+BACKUP="$ZSHRC.backup.$(date +%Y%m%d%H%M%S)"
 CUSTOM_HEADER="# === CUSTOM DEV SHORTCUTS ==="
 INSTALL_IF_MISSING=false
+RESTORE=false
 
-# === Logger Setup ===
-LOGDIR="$HOME/logs"
-LOGFILE="$LOGDIR/zshrc_config.log"
-mkdir -p "$LOGDIR"
+# === Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
+source "$SCRIPT_DIR/../lib/lib-platform.sh"
+
+section "⚙️  Zsh dev shortcuts setup for $PLATFORM_STRING"
+
+ensure_supported_platform arch manjaro
 
 # === Parse Flags ===
 for arg in "$@"; do
     case $arg in
         --install-if-missing) INSTALL_IF_MISSING=true ;;
+        --restore) RESTORE=true ;;
     esac
 done
+
+# === Rollback Logic ===
+if [[ "$RESTORE" == true ]]; then
+    section "♻️  Restoring previous .zshrc backup..."
+    LATEST_BACKUP=$(ls -t "$HOME"/.zshrc.backup.* 2>/dev/null | head -n1 || true)
+    if [[ -f "$LATEST_BACKUP" ]]; then
+        cp "$LATEST_BACKUP" "$ZSHRC"
+        ok "Restored .zshrc from $LATEST_BACKUP"
+        exit 0
+    else
+        fail "No backup .zshrc found to restore!"
+    fi
+fi
 
 # === Check for zsh ===
 if ! command -v zsh &>/dev/null; then
@@ -26,15 +44,7 @@ if ! command -v zsh &>/dev/null; then
 
     if [[ "$INSTALL_IF_MISSING" == true ]]; then
         section "📦 Installing zsh..."
-
-        if [[ -f /etc/arch-release ]]; then
-            sudo pacman -S --noconfirm zsh || fail "Failed to install Zsh via pacman"
-        elif grep -qi opensuse /etc/os-release; then
-            sudo zypper install -y zsh || fail "Failed to install Zsh via zypper"
-        else
-            fail "Unsupported distro. Please install Zsh manually."
-        fi
-
+        sudo pacman -S --noconfirm --needed zsh || fail "Failed to install Zsh via pacman"
         ok "Zsh installed."
     else
         echo -e "${YELLOW}💡 Zsh is not installed. Run this script with:${NC}"
@@ -52,22 +62,21 @@ if [[ "$CURRENT_SHELL" != "zsh" ]]; then
     ok "Shell set to Zsh for $USER"
 fi
 
-# === Backup .zshrc ===
+# === Backup .zshrc, confirm success ===
 if [[ -f "$ZSHRC" ]]; then
-    cp "$ZSHRC" "$ZSHRC.backup"
-    log "🔁 Backup created: $ZSHRC.backup"
+    cp "$ZSHRC" "$BACKUP" && ok "🔁 Backup created: $BACKUP" || fail "Failed to backup .zshrc!"
 else
     touch "$ZSHRC"
     warn "No .zshrc found. Created a new one."
 fi
 
-# === Skip if already configured ===
+# === Check if already configured ===
 if grep -q "$CUSTOM_HEADER" "$ZSHRC"; then
     warn "Shortcuts already added to .zshrc. Skipping."
     exit 0
 fi
 
-# === Append Dev Shortcuts ===
+# === Append Dev Shortcuts, No Duplicates ===
 log "🔧 Adding Laravel/PHP developer shortcuts to .zshrc..."
 
 cat <<'EOF' >>"$ZSHRC"
