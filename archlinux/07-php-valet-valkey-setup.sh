@@ -16,44 +16,44 @@ fi
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
-# === Platform Guard ===
 ensure_supported_platform arch manjaro
-section "📦 PHP, Composer, and Valet Setup for $PLATFORM_STRING"
+section "📦 PHP, Composer, Valet, and Valkey Setup for $PLATFORM_STRING"
 
 # === Uninstall Option ===
 if [[ "${1:-}" == "--uninstall" ]]; then
-    section "🧹 Uninstalling PHP, Composer, Valet..."
+    section "🧹 Uninstalling PHP, Composer, Valet, and Valkey..."
     sudo systemctl stop php-fpm || warn "php-fpm was not running"
     sudo systemctl disable php-fpm || warn "php-fpm was not enabled"
-    sudo pacman -Rs --noconfirm composer php php-fpm || warn "Could not remove PHP/Composer"
+    sudo systemctl stop valkey || warn "valkey was not running"
+    sudo systemctl disable valkey || warn "valkey was not enabled"
+    sudo pacman -Rs --noconfirm composer php php-fpm valkey || warn "Could not remove PHP/Composer/Valkey"
     composer global remove cpriego/valet-linux || warn "Could not remove Valet"
     sudo rm -f /etc/php/conf.d/custom.ini || warn "Could not remove custom PHP ini"
-    ok "PHP, Composer, and Valet have been uninstalled."
+    ok "PHP, Composer, Valet, and Valkey have been uninstalled."
     exit 0
 fi
 
-# === Modular Steps ===
-
+# === Install PHP and Extensions ===
 install_php() {
     section "📥 Installing PHP and extensions"
     local pkgs=(
-        php
-        php-apcu
-        php-fpm
-        php-gd
-        php-iconv
-        php-intl
-        php-json
-        php-mbstring
-        php-openssl
-        php-pdo-mysql
-        php-redis
-        php-sqlite
-        php-tokenizer
-        php-xdebug
-        php-xml
-        php-zip
-        php-pdo
+        php             # Core PHP language interpreter
+        php-apcu        # In-memory user data cache (APCu)
+        php-fpm         # PHP FastCGI Process Manager (service for Nginx/Valet)
+        php-gd          # Image manipulation library (GD)
+        php-iconv       # Character encoding conversion (iconv)
+        php-intl        # Internationalization, locale, number formatting (intl)
+        php-json        # JSON encode/decode support
+        php-mbstring    # Multibyte string handling (UTF-8 etc.)
+        php-openssl     # OpenSSL functions (HTTPS, encryption)
+        php-pdo-mysql   # PDO driver for MySQL/MariaDB databases
+        php-redis       # Redis support (Valkey is a drop-in replacement)
+        php-sqlite      # SQLite database support
+        php-tokenizer   # Tokenizer support (for parsing, e.g. Blade, Composer)
+        php-xdebug      # Debugger and profiler (Xdebug)
+        php-xml         # XML parsing and handling
+        php-zip         # Zip archive support
+        php-pdo         # PDO database abstraction layer (base)
     )
     for pkg in "${pkgs[@]}"; do
         if pacman -Qi "$pkg" &>/dev/null; then
@@ -65,12 +65,14 @@ install_php() {
     done
 }
 
+# === Install Node, NVM ===
 install_nvm_node() {
     log "📥 Installing NVM, Node.js & npm..."
     sudo pacman -S --noconfirm --needed nvm nodejs npm || fail "Failed to install NVM, Node.js, NPM"
     ok "NVM, Node.js, NPM installed"
 }
 
+# === Install Composer ===
 install_composer() {
     if command -v composer &>/dev/null; then
         ok "Composer already installed"
@@ -81,13 +83,13 @@ install_composer() {
     fi
 }
 
+# === Add Composer Bin to PATH ===
 add_composer_bin_to_path() {
     ZSHRC="$HOME/.zshrc"
     COMPOSER_LINE='export PATH="$HOME/.config/composer/vendor/bin:$PATH"'
     log "🔧 Ensuring Composer bin is in PATH..."
 
     if ! grep -Fxq "$COMPOSER_LINE" "$ZSHRC"; then
-        # Backup .zshrc first!
         backup="$ZSHRC.backup.$(date +%Y%m%d%H%M%S)"
         cp "$ZSHRC" "$backup" && ok "Backed up .zshrc to $backup"
         echo "$COMPOSER_LINE" >>"$ZSHRC"
@@ -97,6 +99,7 @@ add_composer_bin_to_path() {
     fi
 }
 
+# === Install Valet ===
 install_valet() {
     export COMPOSER_HOME="$HOME/.config/composer"
     export PATH="$HOME/.config/composer/vendor/bin:$PATH"
@@ -108,6 +111,7 @@ install_valet() {
     fi
 }
 
+# === Install Valet Dependencies ===
 install_valet_deps() {
     local valet_deps=(nss jq xsel networkmanager)
     log "📥 Installing Valet dependencies..."
@@ -115,6 +119,7 @@ install_valet_deps() {
     ok "Valet dependencies installed"
 }
 
+# === Enable PHP-FPM ===
 enable_php_fpm() {
     section "🛠 Enabling php-fpm"
     if systemctl list-units --all | grep -q "php-fpm.service"; then
@@ -125,6 +130,7 @@ enable_php_fpm() {
     fi
 }
 
+# === Write Custom PHP INI ===
 write_custom_php_ini() {
     section "⚙️ Writing local PHP performance settings"
     CUSTOM_INI="/etc/php/conf.d/custom.ini"
@@ -150,6 +156,27 @@ EOF
     ok "Wrote performance config to $CUSTOM_INI"
 }
 
+# === Install and Enable Valkey (Redis replacement) ===
+install_valkey() {
+    section "🟠 Installing Valkey (Redis replacement)"
+    if pacman -Qi valkey &>/dev/null; then
+        ok "Valkey already installed."
+    else
+        sudo pacman -S --needed --noconfirm valkey || fail "Failed to install Valkey"
+        ok "Valkey installed"
+    fi
+    sudo systemctl enable --now valkey || warn "Could not enable/start Valkey"
+    sudo systemctl status valkey --no-pager || warn "Valkey service status check failed."
+}
+
+# === Restart PHP-FPM ===
+restart_php_fpm() {
+    log "🔄 Restarting php-fpm..."
+    sudo systemctl restart php-fpm.service || fail "Failed to restart php-fpm"
+    ok "php-fpm restarted successfully"
+}
+
+# === Final Tool Checks ===
 final_checks() {
     section "🧪 Verifying tools in PATH"
     command -v composer &>/dev/null || fail "Composer is not available in PATH"
@@ -159,13 +186,42 @@ final_checks() {
     ok "Composer, Valet, and PHP verified"
 }
 
-restart_php_fpm() {
-    log "🔄 Restarting php-fpm..."
-    sudo systemctl restart php-fpm.service || fail "Failed to restart php-fpm"
-    ok "php-fpm restarted successfully"
+# === PHP Info Site Setup (Optional, can move to another script) ===
+create_phpinfo_site() {
+    local target_folder="${1:-Local}"
+    local base_dir="${PROJECT_SITES_DIR:-$HOME/Documents/Project-Sites}"
+    local info_dir="$base_dir/$target_folder/info"
+    local info_index="$info_dir/index.php"
+
+    section "📝 Setting up PHP info page in $info_dir"
+    if [[ ! -d "$info_dir" ]]; then
+        mkdir -p "$info_dir" && ok "Created $info_dir"
+    else
+        warn "$info_dir already exists."
+    fi
+    if [[ ! -f "$info_index" ]]; then
+        cat > "$info_index" <<EOF
+<?php
+phpinfo();
+EOF
+        ok "Created $info_index"
+    else
+        warn "$info_index already exists."
+    fi
 }
 
-# === Main Flow ===
+check_phpinfo_site() {
+    local url="http://info.test"
+    section "🌐 Checking $url availability with curl"
+    sleep 2
+    if curl --silent --fail "$url" | grep -q 'phpinfo'; then
+        ok "PHP info site is live and working at $url"
+    else
+        warn "PHP info site at $url did not return expected output. (Did you run 'valet park' in the parent folder? Wait a few seconds and retry if you just parked.)"
+    fi
+}
+
+# === MAIN FLOW ===
 install_php
 install_nvm_node
 install_composer
@@ -175,6 +231,11 @@ install_valet_deps
 enable_php_fpm
 write_custom_php_ini
 restart_php_fpm
+install_valkey
 final_checks
 
-ok "🎉 PHP + Composer + Valet setup completed!"
+# After valet park in Local, create PHP info site and check it
+create_phpinfo_site "Local"
+check_phpinfo_site
+
+ok "🎉 PHP + Composer + Valet + Valkey setup completed!"
