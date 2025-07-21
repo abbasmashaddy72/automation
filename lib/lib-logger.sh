@@ -1,7 +1,4 @@
 #!/bin/bash
-# lib/lib-logger.sh
-
-set -euo pipefail
 
 # === Setup Log Directory ===
 LOGDIR="${LOGDIR:-$HOME/logs}"
