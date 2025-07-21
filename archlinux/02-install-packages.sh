@@ -1,4 +1,20 @@
 #!/bin/bash
+
+# === Ensure interactive terminal ===
+if [[ ! -t 0 || ! -t 1 ]]; then
+    echo "❌ This script must be run in an interactive terminal (not piped or backgrounded)." >&2
+    exit 1
+fi
+
+# === Command-Line Flags ===
+SILENT="${SILENT:-0}"
+DEBUG="${DEBUG:-0}"
+
+# === Optional debug mode ===
+if [[ "$DEBUG" == "1" ]]; then
+    set -x
+fi
+
 set -euo pipefail
 
 # === Include Logger & Platform Detection ===
@@ -19,19 +35,25 @@ source "$SCRIPT_DIR/../lib/lib-platform.sh"
 section "📦 System package installation for $PLATFORM_STRING"
 ensure_supported_platform arch manjaro
 
-# === Prompt for sudo password explicitly (fixes no prompt issue) ===
-echo "🔐 Please enter your sudo password to begin..."
-sudo -v || { fail "Sudo authentication failed. Exiting."; }
+# === Manual password prompt to force interactive input if sudo hangs ===
+echo -n "🔐 Enter your sudo password: "
+read -rs SUDO_PASS
+echo
 
-# === Optional debug mode ===
-if [[ "${DEBUG:-0}" == "1" ]]; then
-    set -x
+# === Prime sudo with password using askpass workaround ===
+export SUDO_ASKPASS="$(mktemp)"
+chmod +x "$SUDO_ASKPASS"
+echo -e "#!/bin/bash\necho \"$SUDO_PASS\"" > "$SUDO_ASKPASS"
+
+# === Trigger sudo using askpass ===
+if ! sudo -A true; then
+    fail "❌ Incorrect sudo password or sudo not configured. Exiting."
 fi
 
-# === Command-Line Flags ===
-SILENT="${SILENT:-0}"
-DEBUG="${DEBUG:-0}"
+# === Clean up password file ===
+rm -f "$SUDO_ASKPASS"
 
+# === Arrays for tracking ===
 declare -a installed_packages already_present failed_packages
 
 # === Install Helpers ===
