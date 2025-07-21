@@ -33,7 +33,10 @@ ensure_supported_platform arch manjaro
 
 # === Interactive Sudo Prompt ===
 echo "🔐 Please enter your sudo password to begin..."
-sudo -v
+if ! sudo -v; then
+    echo "❌ Failed to authenticate sudo." >&2
+    exit 1
+fi
 
 # === Arrays for tracking ===
 declare -a installed_packages already_present failed_packages
@@ -69,17 +72,22 @@ install_with_pamac() {
 install_package() {
     local package="$1"
     local manager="$2"
+
     if [[ "$manager" == "pacman" ]]; then
         if is_installed_pacman "$package"; then
             already_present+=("$package")
-            [[ "${DEBUG:-0}" == "1" ]] && ok "$package already installed (pacman)"
+            if [[ "${DEBUG:-}" == "1" ]]; then
+                ok "$package already installed (pacman)"
+            fi
         else
             install_with_pacman "$package"
         fi
     elif [[ "$manager" == "pamac" ]]; then
         if is_installed_pamac "$package"; then
             already_present+=("$package")
-            [[ "${DEBUG:-0}" == "1" ]] && ok "$package already installed (pamac)"
+            if [[ "${DEBUG:-}" == "1" ]]; then
+                ok "$package already installed (pamac)"
+            fi
         else
             install_with_pamac "$package"
         fi
