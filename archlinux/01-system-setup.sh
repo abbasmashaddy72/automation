@@ -34,6 +34,15 @@ update_mirrors() {
     fi
 }
 
+full_system_upgrade() {
+    log "⬆️ Performing full system upgrade..."
+    if sudo pacman -Syu --noconfirm; then
+        ok "System fully upgraded."
+    else
+        fail "System upgrade failed."
+    fi
+}
+
 setup_fstrim() {
     log "🧼 Checking fstrim.timer status..."
     if systemctl is-enabled fstrim.timer &>/dev/null; then
@@ -123,6 +132,7 @@ install_language_tools() {
 # === Execute Modular Steps ===
 
 update_mirrors
+full_system_upgrade
 setup_fstrim
 tune_swappiness
 install_ufw

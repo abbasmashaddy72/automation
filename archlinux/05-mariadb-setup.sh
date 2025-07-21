@@ -85,10 +85,9 @@ fi
 
 export MARIADB_ROOT_PASSWORD="$mariadb_pass"
 
-# Run mariadb-secure-installation in non-interactive mode if possible (for modern MariaDB)
+# === Secure MariaDB using mariadb-secure-installation ===
 if command -v mariadb-secure-installation &>/dev/null; then
-    # For MariaDB 10.5+ we can use env variable or expect script
-    log "🔒 Securing MariaDB installation..."
+    log "🔒 Running mariadb-secure-installation..."
     if ! sudo mariadb-secure-installation <<EOF
 Y
 $mariadb_pass
@@ -99,13 +98,30 @@ Y
 Y
 EOF
     then
-        warn "Automatic secure installation failed, please run 'sudo mariadb-secure-installation' manually."
-        exit 1
+        warn "⚠️ mariadb-secure-installation failed or partially succeeded."
+    else
+        ok "✅ mariadb-secure-installation completed."
     fi
 else
     warn "mariadb-secure-installation not found, skipping secure setup."
 fi
 
+# === Always enforce root password after secure-installation ===
+log "🔐 Enforcing root password manually via SQL (in case secure-installation didn’t apply it)..."
+alter_root_sql=$(cat <<EOF
+-- Force root to use mysql_native_password with given password
+ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('${mariadb_pass}');
+FLUSH PRIVILEGES;
+EOF
+)
+
+if echo "$alter_root_sql" | sudo mariadb -u root; then
+    ok "✅ Root password enforced successfully after secure-installation."
+else
+    fail "❌ Failed to set root password. Please verify manually."
+fi
+
+# === Final Summary ===
 ok "🎉 MariaDB setup completed successfully!"
 
 # === Service/Version Recap ===

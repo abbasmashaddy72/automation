@@ -122,12 +122,8 @@ install_valet_deps() {
 # === Enable PHP-FPM ===
 enable_php_fpm() {
     section "🛠 Enabling php-fpm"
-    if systemctl list-units --all | grep -q "php-fpm.service"; then
-        sudo systemctl enable --now php-fpm.service || fail "php-fpm service failed"
-        ok "php-fpm is active"
-    else
-        fail "php-fpm.service not found. Was php-fpm installed?"
-    fi
+    sudo systemctl enable --now php-fpm.service || fail "php-fpm service failed to start or enable"
+    ok "php-fpm is active and enabled"
 }
 
 # === Write Custom PHP INI ===
@@ -176,6 +172,13 @@ restart_php_fpm() {
     ok "php-fpm restarted successfully"
 }
 
+# === Initialize Valet ===
+valet_install() {
+    section "🚀 Running valet install"
+    valet install || fail "Valet install failed"
+    ok "Valet installed and initialized successfully"
+}
+
 # === Final Tool Checks ===
 final_checks() {
     section "🧪 Verifying tools in PATH"
@@ -194,11 +197,15 @@ create_phpinfo_site() {
     local info_index="$info_dir/index.php"
 
     section "📝 Setting up PHP info page in $info_dir"
+
+    # Create directory structure
     if [[ ! -d "$info_dir" ]]; then
         mkdir -p "$info_dir" && ok "Created $info_dir"
     else
         warn "$info_dir already exists."
     fi
+
+    # Create index.php if not exists
     if [[ ! -f "$info_index" ]]; then
         cat > "$info_index" <<EOF
 <?php
@@ -208,6 +215,12 @@ EOF
     else
         warn "$info_index already exists."
     fi
+
+    # Run valet park inside the parent directory
+    pushd "$base_dir/$target_folder" >/dev/null
+    valet park || warn "Could not run 'valet park' in $base_dir/$target_folder"
+    popd >/dev/null
+    ok "Ran 'valet park' in $base_dir/$target_folder"
 }
 
 check_phpinfo_site() {
@@ -231,6 +244,7 @@ install_valet_deps
 enable_php_fpm
 write_custom_php_ini
 restart_php_fpm
+valet_install
 install_valkey
 final_checks
 

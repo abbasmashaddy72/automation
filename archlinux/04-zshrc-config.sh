@@ -133,7 +133,11 @@ ok "✅ Laravel/PHP shortcuts added to .zshrc"
 read -rp "⏎ Reload .zshrc now to apply changes? [y/N]: " reload_now
 if [[ "$reload_now" =~ ^[Yy]$ ]]; then
     log "🔄 Reloading .zshrc..."
-    exec zsh
+    if [[ "$SHELL" == *"zsh" ]]; then
+        source "$ZSHRC"
+    else
+        zsh
+    fi
 else
     warn "You must reload your shell manually to use the new shortcuts."
 fi

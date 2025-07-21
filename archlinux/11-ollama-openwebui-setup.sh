@@ -85,12 +85,35 @@ fi
 
 # === Ensure Ollama running on port 11434 ===
 if ! ss -tuln | grep -q ':11434'; then
-    log "▶️ Starting Ollama manually..."
-    sudo pkill ollama || true
-    OLLAMA_HOST=0.0.0.0 ollama serve & disown
+    log "▶️ Restarting Ollama service..."
+    sudo systemctl restart ollama
     sleep 3
     ss -tuln | grep -q ':11434' || fail "Ollama failed to start on port 11434"
     ok "Ollama running on 0.0.0.0:11434"
+
+    # === UFW Rules for Docker Access (Optional but Recommended) ===
+    if command -v ufw &>/dev/null; then
+        log "🔐 Configuring UFW to allow Docker container access to Ollama"
+
+        # Allow Ollama port from loopback
+        sudo ufw allow in on lo to any port 11434 proto tcp || warn "Failed to allow 11434 on lo"
+
+        # Allow Ollama port from docker bridge interface
+        if ip link show docker0 &>/dev/null; then
+            sudo ufw allow in on docker0 to any port 11434 proto tcp || warn "Failed to allow 11434 on docker0"
+        else
+            warn "docker0 interface not found — skipping docker0 UFW rule"
+        fi
+
+        # Allow Open WebUI port from outside (optional)
+        sudo ufw allow "$OPENWEBUI_PORT"/tcp || warn "Failed to allow port $OPENWEBUI_PORT"
+
+        # Reload UFW to apply
+        sudo ufw reload || warn "Failed to reload UFW"
+        ok "UFW rules applied for Ollama and Open WebUI"
+    else
+        warn "ufw not found, skipping firewall configuration"
+    fi
 else
     ok "Ollama already running on port 11434"
 fi
@@ -111,10 +134,48 @@ docker run -d \
 ok "Open WebUI is running at http://localhost:$OPENWEBUI_PORT"
 log "🧠 Ollama is accessible at http://localhost:11434"
 
-# === Health Check ===
-log "🔎 Checking Open WebUI status..."
-sleep 2
-curl --silent --fail http://localhost:$OPENWEBUI_PORT &>/dev/null && ok "Open WebUI is responding" || fail "Open WebUI is not responding"
+# === Wait for Open WebUI Docker health to be 'healthy' ===
+log "🔎 Waiting for Open WebUI container health to be 'healthy'..."
+
+MAX_HEALTH_WAIT=60  # seconds
+SECONDS_WAITED=0
+HEALTH_STATUS="starting"
+
+while [[ "$SECONDS_WAITED" -lt "$MAX_HEALTH_WAIT" ]]; do
+  HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' open-webui 2>/dev/null || echo "not-found")
+
+  case "$HEALTH_STATUS" in
+    healthy)
+      ok "Open WebUI container is healthy"
+      break
+      ;;
+    unhealthy)
+      fail "Open WebUI container is unhealthy"
+      ;;
+    not-found)
+      fail "Open WebUI container not found"
+      ;;
+    *)
+      sleep 2
+      ((SECONDS_WAITED+=2))
+      ;;
+  esac
+done
+
+if [[ "$HEALTH_STATUS" != "healthy" ]]; then
+  fail "Timed out waiting for Open WebUI to become healthy"
+fi
+
+# === Final HTTP Check for Readiness ===
+log "🔎 Verifying Open WebUI is responding on http://localhost:$OPENWEBUI_PORT..."
+
+for i in {1..10}; do
+  if curl --silent --fail "http://localhost:$OPENWEBUI_PORT" &>/dev/null; then
+    ok "Open WebUI is responding"
+    break
+  fi
+  sleep 2
+done || fail "Open WebUI did not respond after container became healthy"
 
 # === Pull Default Model ===
 log "📥 Pulling Ollama model: $DEFAULT_MODEL..."

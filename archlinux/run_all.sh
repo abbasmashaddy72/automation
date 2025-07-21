@@ -1,23 +1,30 @@
 #!/bin/bash
 set -euo pipefail
 
-# === Platform Check (single-source-of-truth) ===
+# === Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/lib/lib-platform.sh"
 
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
+    echo "Logger library not found at ../lib/lib-logger.sh! Exiting." >&2
+    exit 1
+fi
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
+    echo "Platform library not found at ../lib/lib-platform.sh! Exiting." >&2
+    exit 1
+fi
+
+source "$SCRIPT_DIR/../lib/lib-logger.sh"
+source "$SCRIPT_DIR/../lib/lib-platform.sh"
+
+# === Distro Check ===
 ensure_supported_platform arch manjaro
+section "🚀 Starting full system setup for $PLATFORM_STRING"
 
+# === Logging Setup ===
 LOGDIR="$HOME/logs/setup"
 mkdir -p "$LOGDIR"
 
 START_TIME=$(date +%s)
-
-log() {
-    echo "$(date '+%F %T') | $*"
-}
-error() {
-    echo "$(date '+%F %T') | ❌ ERROR: $*" >&2
-}
 
 # === Scripts to run, in order ===
 SCRIPTS=(
@@ -34,14 +41,14 @@ SCRIPTS=(
     11-ollama-openwebui-setup.sh
 )
 
-# === Exclude scripts (via --exclude, EXCLUDE env, or prompt) ===
+# === Handle --exclude flags ===
 EXCLUDE=()
 for arg in "$@"; do
     case "$arg" in
         --exclude=*) IFS=, read -ra EXCLUDE <<< "${arg#*=}" ;;
     esac
 done
-if [[ -n "${EXCLUDE:-}" ]]; then
+if [[ -n "${EXCLUDE[*]:-}" ]]; then
     log "Excluding scripts: ${EXCLUDE[*]}"
 fi
 
@@ -53,14 +60,14 @@ run_script() {
         log "▶️ Running $script..."
         if bash "$script" 2>&1 | tee -a "$LOGDIR/$(basename "$script").log"; then
             RESULTS["$script"]="✅ Success"
-            log "✔️ $script completed"
+            ok "$script completed"
         else
             RESULTS["$script"]="❌ Failed"
-            error "$script FAILED (see $LOGDIR/$(basename "$script").log)"
+            fail "$script FAILED (see $LOGDIR/$(basename "$script").log)"
         fi
     else
         RESULTS["$script"]="❌ Not found"
-        error "$script not found!"
+        fail "$script not found!"
     fi
 }
 
@@ -78,6 +85,7 @@ for script in "${SCRIPTS[@]}"; do
     fi
 done
 
+# === Summary ===
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 MINUTES=$((DURATION / 60))
@@ -85,20 +93,18 @@ SECONDS=$((DURATION % 60))
 
 # === Summary Table ===
 echo
-log "========== SETUP SUMMARY =========="
+section "✅ SETUP SUMMARY"
 printf "%-30s %s\n" "Script" "Status"
 printf "%-30s %s\n" "------" "------"
 for script in "${SCRIPTS[@]}"; do
     printf "%-30s %s\n" "$script" "${RESULTS[$script]:-❓ Unknown}"
 done
 
-log "==================================="
+log "🕒 Total setup time: ${MINUTES}m ${SECONDS}s"
 
-log "Total setup time: ${MINUTES}m ${SECONDS}s"
-
-log "Next steps:"
+log "📝 Next steps:"
 echo "- Review logs in $LOGDIR if any script failed"
 echo "- Log out/log in if your group or shell was changed"
 echo "- For any failed script, rerun with: ./run_all.sh --exclude=... to skip others"
 
-log "🎉 All requested setup scripts have finished!"
+ok "🎉 All requested setup scripts have finished!"

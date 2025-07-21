@@ -62,16 +62,24 @@ else
         "Brave"
         "Firefox"
         "Chrome"
-        "Firefox Developer"
+        "Firefox Developer Edition"
         "Kate"
         "Visual Studio Code"
         "Void"
         "Android Studio"
         "PyCharm"
-        "IntelliJ"
+        "IntelliJ IDEA Community Edition"
         "Postman"
     )
 fi
+
+declare -A APP_NAME_FALLBACKS=(
+    ["System Monitor"]="org.kde.plasma-systemmonitor.desktop"
+    ["Firefox Developer Edition"]="firefox-developer-edition.desktop"
+    ["Visual Studio Code"]="code.desktop"
+    ["Android Studio"]="android-studio.desktop"
+    ["IntelliJ IDEA Community Edition"]="idea.desktop"
+)
 
 for arg in "$@"; do
     case "$arg" in
@@ -83,14 +91,27 @@ declare -a FOUND_LAUNCHERS PINNED
 
 log "🔍 Searching for .desktop launchers..."
 for name in "${APP_NAMES[@]}"; do
+    file_name=""
+
+    # Try auto-discovery
     desktop_file=$(find /usr/share/applications ~/.local/share/applications -iname "*${name}*.desktop" | head -n1)
     if [[ -n "$desktop_file" ]]; then
         file_name=$(basename "$desktop_file")
-        FOUND_LAUNCHERS+=("applications:${file_name}")
-        PINNED+=("$name")
         ok "Found launcher for '$name' → $file_name"
+
+    # Fallback if not found
+    elif [[ -n "${APP_NAME_FALLBACKS[$name]:-}" ]]; then
+        file_name="${APP_NAME_FALLBACKS[$name]}"
+        warn "Used fallback for '$name' → $file_name"
+
     else
         warn "No launcher found for '$name'"
+    fi
+
+    # Only add if we have a resolved .desktop filename
+    if [[ -n "$file_name" ]]; then
+        FOUND_LAUNCHERS+=("applications:${file_name}")
+        PINNED+=("$name")
     fi
 done
 

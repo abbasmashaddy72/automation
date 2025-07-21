@@ -81,6 +81,8 @@ backup_and_check() {
 }
 
 declare -a applied_rules skipped_rules
+applied_rules=()
+skipped_rules=()
 
 # === Apply iPhone Rule ===
 if backup_and_check "$IPHONE_RULE"; then
