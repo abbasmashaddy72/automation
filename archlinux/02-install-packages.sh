@@ -60,12 +60,14 @@ install_with_pacman() {
 install_with_pamac() {
     local pkg="$1"
     echo "📦 Installing $pkg via pamac..."
-    if pamac install --no-confirm "$pkg"; then
+    pamac install --no-confirm "$pkg" >/dev/null 2>&1
+
+    if pamac list --installed "$pkg" &>/dev/null; then
         installed_packages+=("$pkg")
         ok "$pkg installed (pamac)"
     else
         failed_packages+=("$pkg")
-        warn "Failed to install $pkg via pamac"
+        warn "❌ $pkg failed to install via pamac (post-check failed)"
     fi
 }
 
