@@ -20,8 +20,15 @@ ensure_supported_platform arch manjaro
 
 # === Temporary NOPASSWD sudo ===
 echo "🔐 Requesting temporary sudo elevation (NOPASSWD enabled for duration)..."
-echo "%wheel ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/99-temp-nopasswd > /dev/null
-trap 'echo "⚠️ Reverting temporary sudo rule..." && sudo rm -f /etc/sudoers.d/99-temp-nopasswd' EXIT
+
+if sudo tee /etc/sudoers.d/99-temp-nopasswd > /dev/null <<'EOF'
+%wheel ALL=(ALL) NOPASSWD: ALL
+EOF
+then
+    trap 'echo "⚠️ Reverting temporary sudo rule..." && sudo rm -f /etc/sudoers.d/99-temp-nopasswd' EXIT
+else
+    warn "⚠️ Failed to write sudoers override. Proceeding without NOPASSWD."
+fi
 
 # === Keep sudo alive in the background ===
 (sudo -v; while true; do sleep 60; sudo -nv; kill -0 "$$" || exit; done 2>/dev/null) &
