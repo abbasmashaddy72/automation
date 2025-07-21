@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # === Configurable Debug and Verbosity ===
-SILENT="${SILENT:-0}"
 DEBUG="${DEBUG:-0}"
+SILENT="${SILENT:-0}"
 
 # === Optional Debug Mode (prints every command) ===
 [[ "$DEBUG" == "1" ]] && set -x
@@ -11,7 +11,7 @@ DEBUG="${DEBUG:-0}"
 set -euo pipefail
 
 # === Trap to Show Last Failing Command (for diagnostics) ===
-trap 'echo -e "\n❌ Script failed at line $LINENO: $BASH_COMMAND" >&2' ERR
+trap 'echo -e "\n❌ Script failed at line $LINENO while running: $BASH_COMMAND (exit code: $?)" >&2' ERR
 
 # === Include Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -44,6 +44,7 @@ is_installed_pamac() { pamac list --installed "$1" &>/dev/null; }
 
 install_with_pacman() {
     local pkg="$1"
+    echo "📦 Installing $pkg via pacman..."
     if sudo pacman -S --needed --noconfirm "$pkg"; then
         installed_packages+=("$pkg")
         ok "$pkg installed (pacman)"
@@ -55,6 +56,7 @@ install_with_pacman() {
 
 install_with_pamac() {
     local pkg="$1"
+    echo "📦 Installing $pkg via pamac..."
     if pamac install --no-confirm "$pkg"; then
         installed_packages+=("$pkg")
         ok "$pkg installed (pamac)"
@@ -70,14 +72,14 @@ install_package() {
     if [[ "$manager" == "pacman" ]]; then
         if is_installed_pacman "$package"; then
             already_present+=("$package")
-            [[ "$DEBUG" == "1" ]] && ok "$package already installed (pacman)"
+            [[ "${DEBUG:-0}" == "1" ]] && ok "$package already installed (pacman)"
         else
             install_with_pacman "$package"
         fi
     elif [[ "$manager" == "pamac" ]]; then
         if is_installed_pamac "$package"; then
             already_present+=("$package")
-            [[ "$DEBUG" == "1" ]] && ok "$package already installed (pamac)"
+            [[ "${DEBUG:-0}" == "1" ]] && ok "$package already installed (pamac)"
         else
             install_with_pamac "$package"
         fi
@@ -145,7 +147,6 @@ pamac_packages=(
 
 # === Package Parameterization ===
 if [[ $# -gt 0 ]]; then
-    # If args provided, install only those packages (find in either array)
     section "🎯 Installing requested packages: $*"
     targets=("$@")
     for pkg in "${targets[@]}"; do
@@ -159,7 +160,6 @@ if [[ $# -gt 0 ]]; then
         fi
     done
 else
-    # Default: install everything
     section "📦 Installing official (pacman) packages..."
     for package in "${pacman_packages[@]}"; do
         install_package "$package" "pacman"
