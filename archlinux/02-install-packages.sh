@@ -192,22 +192,16 @@ fi
 # === Final Summary ===
 section "📊 Installation Summary"
 
-if declare -p installed_packages &>/dev/null; then
-  if [[ "$(declare -p installed_packages)" == *"declare -a"* ]] && [[ ${#installed_packages[@]} -gt 0 ]]; then
+if (( ${#installed_packages[@]:-0} > 0 )); then
     log "🟢 Newly installed: ${installed_packages[*]}"
-  fi
 fi
 
-if declare -p already_present &>/dev/null; then
-  if [[ "$(declare -p already_present)" == *"declare -a"* ]] && [[ ${#already_present[@]} -gt 0 ]]; then
+if (( ${#already_present[@]:-0} > 0 )); then
     log "🟡 Already present: ${already_present[*]}"
-  fi
 fi
 
-if declare -p failed_packages &>/dev/null; then
-  if [[ "$(declare -p failed_packages)" == *"declare -a"* ]] && [[ ${#failed_packages[@]} -gt 0 ]]; then
+if (( ${#failed_packages[@]:-0} > 0 )); then
     warn "🔴 Failed to install: ${failed_packages[*]}"
-  fi
 fi
 
 # === VirtualBox group handling ===
