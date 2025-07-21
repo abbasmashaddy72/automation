@@ -186,15 +186,18 @@ fi
 # === Final Summary ===
 section "📊 Installation Summary"
 
-if declare -p installed_packages &>/dev/null && [[ "${#installed_packages[@]}" -gt 0 ]]; then
+if [[ "$(declare -p installed_packages 2>/dev/null || echo 'unset')" != "unset" ]] && \
+   [[ ${#installed_packages[@]} -gt 0 ]]; then
     log "🟢 Newly installed: ${installed_packages[*]}"
 fi
 
-if declare -p already_present &>/dev/null && [[ "${#already_present[@]}" -gt 0 ]]; then
+if [[ "$(declare -p already_present 2>/dev/null || echo 'unset')" != "unset" ]] && \
+   [[ ${#already_present[@]} -gt 0 ]]; then
     log "🟡 Already present: ${already_present[*]}"
 fi
 
-if declare -p failed_packages &>/dev/null && [[ "${#failed_packages[@]}" -gt 0 ]]; then
+if [[ "$(declare -p failed_packages 2>/dev/null || echo 'unset')" != "unset" ]] && \
+   [[ ${#failed_packages[@]} -gt 0 ]]; then
     warn "🔴 Failed to install: ${failed_packages[*]}"
 fi
 
