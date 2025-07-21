@@ -43,7 +43,10 @@ declare -a installed_packages already_present failed_packages
 
 # === Install Helpers ===
 is_installed_pacman() { pacman -Qi "$1" &>/dev/null; }
-is_installed_pamac() { pamac list --installed "$1" &>/dev/null; }
+is_installed_pamac() {
+    local pkg="$1"
+    pamac list --installed | awk '{print $1}' | grep -qx "$pkg"
+}
 
 install_with_pacman() {
     local pkg="$1"
