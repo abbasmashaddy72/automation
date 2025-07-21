@@ -60,14 +60,17 @@ install_with_pacman() {
 install_with_pamac() {
     local pkg="$1"
     echo "📦 Installing $pkg via pamac..."
+
+    # Install attempt
     pamac install --no-confirm "$pkg" >/dev/null 2>&1
 
-    if pamac list --installed "$pkg" &>/dev/null; then
+    # Verify real install
+    if pamac list --installed | awk '{print $1}' | grep -qx "$pkg"; then
         installed_packages+=("$pkg")
         ok "$pkg installed (pamac)"
     else
         failed_packages+=("$pkg")
-        warn "❌ $pkg failed to install via pamac (post-check failed)"
+        warn "❌ $pkg failed to install via pamac (not found post-install)"
     fi
 }
 
@@ -188,18 +191,21 @@ fi
 # === Final Summary ===
 section "📊 Installation Summary"
 
-if [[ "$(declare -p installed_packages 2>/dev/null || echo 'unset')" != "unset" ]] && \
-   [[ ${#installed_packages[@]} -gt 0 ]]; then
+if [[ "$(declare -p installed_packages 2>/dev/null || echo unset)" != "unset" ]] && \
+   [[ "$(declare -p installed_packages 2>/dev/null)" == *"declare -a"* ]] && \
+   [[ ${#installed_packages[@]:-0} -gt 0 ]]; then
     log "🟢 Newly installed: ${installed_packages[*]}"
 fi
 
-if [[ "$(declare -p already_present 2>/dev/null || echo 'unset')" != "unset" ]] && \
-   [[ ${#already_present[@]} -gt 0 ]]; then
+if [[ "$(declare -p already_present 2>/dev/null || echo unset)" != "unset" ]] && \
+   [[ "$(declare -p already_present 2>/dev/null)" == *"declare -a"* ]] && \
+   [[ ${#already_present[@]:-0} -gt 0 ]]; then
     log "🟡 Already present: ${already_present[*]}"
 fi
 
-if [[ "$(declare -p failed_packages 2>/dev/null || echo 'unset')" != "unset" ]] && \
-   [[ ${#failed_packages[@]} -gt 0 ]]; then
+if [[ "$(declare -p failed_packages 2>/dev/null || echo unset)" != "unset" ]] && \
+   [[ "$(declare -p failed_packages 2>/dev/null)" == *"declare -a"* ]] && \
+   [[ ${#failed_packages[@]:-0} -gt 0 ]]; then
     warn "🔴 Failed to install: ${failed_packages[*]}"
 fi
 
