@@ -194,22 +194,22 @@ fi
 # === Final Summary ===
 section "📊 Installation Summary"
 
-if [[ "$(declare -p installed_packages 2>/dev/null || echo unset)" != "unset" ]] && \
-   [[ "$(declare -p installed_packages 2>/dev/null)" == *"declare -a"* ]] && \
-   [[ ${#installed_packages[@]:-0} -gt 0 ]]; then
+if declare -p installed_packages &>/dev/null; then
+  if [[ "$(declare -p installed_packages)" == *"declare -a"* ]] && [[ ${#installed_packages[@]} -gt 0 ]]; then
     log "🟢 Newly installed: ${installed_packages[*]}"
+  fi
 fi
 
-if [[ "$(declare -p already_present 2>/dev/null || echo unset)" != "unset" ]] && \
-   [[ "$(declare -p already_present 2>/dev/null)" == *"declare -a"* ]] && \
-   [[ ${#already_present[@]:-0} -gt 0 ]]; then
+if declare -p already_present &>/dev/null; then
+  if [[ "$(declare -p already_present)" == *"declare -a"* ]] && [[ ${#already_present[@]} -gt 0 ]]; then
     log "🟡 Already present: ${already_present[*]}"
+  fi
 fi
 
-if [[ "$(declare -p failed_packages 2>/dev/null || echo unset)" != "unset" ]] && \
-   [[ "$(declare -p failed_packages 2>/dev/null)" == *"declare -a"* ]] && \
-   [[ ${#failed_packages[@]:-0} -gt 0 ]]; then
+if declare -p failed_packages &>/dev/null; then
+  if [[ "$(declare -p failed_packages)" == *"declare -a"* ]] && [[ ${#failed_packages[@]} -gt 0 ]]; then
     warn "🔴 Failed to install: ${failed_packages[*]}"
+  fi
 fi
 
 # === VirtualBox group handling ===
