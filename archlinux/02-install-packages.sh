@@ -45,7 +45,7 @@ declare -a installed_packages already_present failed_packages
 is_installed_pacman() { pacman -Qi "$1" &>/dev/null; }
 is_installed_pamac() {
     local pkg="$1"
-    pamac list --installed | awk '{print $1}' | grep -qx "$pkg"
+    pacman -Q "$pkg" &>/dev/null
 }
 
 install_with_pacman() {
@@ -64,16 +64,14 @@ install_with_pamac() {
     local pkg="$1"
     echo "📦 Installing $pkg via pamac..."
 
-    # Install attempt
     pamac install --no-confirm "$pkg" >/dev/null 2>&1
 
-    # Verify real install
-    if pamac list --installed | awk '{print $1}' | grep -qx "$pkg"; then
+    if pacman -Q "$pkg" &>/dev/null; then
         installed_packages+=("$pkg")
-        ok "$pkg installed (pamac)"
+        ok "$pkg installed (verified via pacman)"
     else
         failed_packages+=("$pkg")
-        warn "❌ $pkg failed to install via pamac (not found post-install)"
+        warn "❌ $pkg failed to install via pamac (not found via pacman)"
     fi
 }
 
