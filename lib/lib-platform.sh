@@ -1,7 +1,4 @@
 #!/bin/bash
-# lib/lib-platform.sh
-
-set -euo pipefail
 
 # === OS Detection ===
 if [[ -f /etc/os-release ]]; then
