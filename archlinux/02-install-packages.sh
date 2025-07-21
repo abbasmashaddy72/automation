@@ -1,5 +1,4 @@
 #!/bin/bash
-set -euo pipefail
 
 # === Include Logger & Platform Detection ===
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,6 +17,22 @@ source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
 section "📦 System package installation for $PLATFORM_STRING"
 ensure_supported_platform arch manjaro
+
+# === Temporary NOPASSWD sudo ===
+echo "🔐 Requesting temporary sudo elevation (NOPASSWD enabled for duration)..."
+echo "%wheel ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/99-temp-nopasswd > /dev/null
+trap 'echo "⚠️ Reverting temporary sudo rule..." && sudo rm -f /etc/sudoers.d/99-temp-nopasswd' EXIT
+
+# === Keep sudo alive in the background ===
+(sudo -v; while true; do sleep 60; sudo -nv; kill -0 "$$" || exit; done 2>/dev/null) &
+
+# === Now safe to enable strict bash behavior ===
+set -euo pipefail
+
+# === Optional debug mode ===
+if [[ "${DEBUG:-0}" == "1" ]]; then
+    set -x
+fi
 
 # === Command-Line Flags ===
 SILENT="${SILENT:-0}"
