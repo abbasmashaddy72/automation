@@ -129,6 +129,27 @@ install_language_tools() {
     fi
 }
 
+enable_aur_support() {
+    local pamac_conf="/etc/pamac.conf"
+    log "📦 Enabling AUR support in $pamac_conf..."
+
+    if [[ ! -f $pamac_conf ]]; then
+        fail "$pamac_conf not found!"
+    fi
+
+    # Enable AUR
+    sudo sed -Ei 's/^#(EnableAUR)/\1/' "$pamac_conf"
+
+    # Enable AUR update checks
+    sudo sed -Ei 's/^#(CheckAURUpdates)/\1/' "$pamac_conf"
+
+    # Ensure both settings are set to true
+    sudo sed -Ei 's/^(EnableAUR\s*=).*/\1 true/' "$pamac_conf"
+    sudo sed -Ei 's/^(CheckAURUpdates\s*=).*/\1 true/' "$pamac_conf"
+
+    ok "AUR support and update checking enabled."
+}
+
 # === Execute Modular Steps ===
 
 update_mirrors
@@ -139,5 +160,6 @@ install_ufw
 enable_ufw
 configure_grub
 install_language_tools
+enable_aur_support
 
 ok "🎉 System setup completed successfully!"

@@ -67,14 +67,17 @@ install_with_pamac() {
     local pkg="$1"
     echo "📦 Installing $pkg via pamac..."
 
-    pamac install --no-confirm "$pkg" >/dev/null 2>&1
-
-    if pacman -Q "$pkg" &>/dev/null; then
-        installed_packages+=("$pkg")
-        ok "$pkg installed (verified via pacman)"
+    if pamac install --no-confirm "$pkg"; then
+        if pacman -Q "$pkg" &>/dev/null; then
+            installed_packages+=("$pkg")
+            ok "$pkg installed (verified via pacman)"
+        else
+            failed_packages+=("$pkg")
+            warn "❌ $pkg not found via pacman after pamac install"
+        fi
     else
         failed_packages+=("$pkg")
-        warn "❌ $pkg failed to install via pamac (not found via pacman)"
+        warn "❌ $pkg failed to install via pamac"
     fi
 }
 

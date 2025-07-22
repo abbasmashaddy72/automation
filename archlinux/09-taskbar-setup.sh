@@ -94,7 +94,12 @@ for name in "${APP_NAMES[@]}"; do
     file_name=""
 
     # Try auto-discovery
-    desktop_file=$(find /usr/share/applications ~/.local/share/applications -iname "*${name}*.desktop" | head -n1)
+    search_paths=(/usr/share/applications)
+    user_app_dir="$HOME/.local/share/applications"
+
+    [[ -d "$user_app_dir" ]] && search_paths+=("$user_app_dir")
+
+    desktop_file=$(find "${search_paths[@]}" -type f -iname "*${name}*.desktop" 2>/dev/null | head -n1)
     if [[ -n "$desktop_file" ]]; then
         file_name=$(basename "$desktop_file")
         ok "Found launcher for '$name' → $file_name"
