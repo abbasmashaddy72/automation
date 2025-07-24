@@ -152,6 +152,22 @@ EOF
     ok "Wrote performance config to $CUSTOM_INI"
 }
 
+enable_extra_php_extensions() {
+    section "📎 Enabling additional PHP extensions"
+
+    local extensions=(bcmath gd intl iconv mbstring pdo pdo_mysql sqlite3 zip)
+
+    for ext in "${extensions[@]}"; do
+        ini_file="/etc/php/conf.d/zz-$ext.ini"
+        if [[ ! -f "$ini_file" ]]; then
+            echo "extension=$ext" | sudo tee "$ini_file" >/dev/null
+            ok "Enabled $ext via $ini_file"
+        else
+            warn "$ext already enabled"
+        fi
+    done
+}
+
 # === Install and Enable Valkey (Redis replacement) ===
 install_valkey() {
     section "🟠 Installing Valkey (Redis replacement)"
@@ -243,6 +259,7 @@ install_valet
 install_valet_deps
 enable_php_fpm
 write_custom_php_ini
+enable_extra_php_extensions
 restart_php_fpm
 valet_install
 install_valkey
