@@ -1,171 +1,50 @@
 #!/bin/bash
+set -euo pipefail
 
-# Define each task as an associative array
-declare -A task1=(
-  [title]="Apply theme"
-  [category]="Quick Settings"
-  [action]="Select 'Breath Dark' theme"
-)
+##############################################################################
+# 12-setup-checklist.sh
+#   - Interactive post-install system setup checklist with task status
+#   - Uses add_task "Title | Category | Action" for legible entries
+##############################################################################
 
-declare -A task2=(
-  [title]="Set touchpad speed"
-  [category]="Mouse & Touchpad"
-  [action]="Set Pointer speed to 0.4"
-)
+# --- Add tasks here using: add_task "Title | Category | Action" ---
+declare -a tasks=()
+add_task() {
+  tasks+=("$1")
+}
 
-declare -A task3=(
-  [title]="Set notification volume"
-  [category]="Sound"
-  [action]="Adjust notification volume"
-)
+add_task "Apply theme | Quick Settings | Select 'Breath Dark' theme"
+add_task "Set touchpad speed | Mouse & Touchpad | Set Pointer speed to 0.4"
+add_task "Set notification volume | Sound | Adjust notification volume"
+add_task "Enable raise max volume | Sound | Enable 'Allow volume above 100%'"
+add_task "Enable night light | Colors & Theme | Enable Night Light with Custom Schedule"
+add_task "Set default browser | Default Applications | Set default browser (e.g., Firefox)"
+add_task "Set task switcher | Window Management | Choose 'Flip Switch' for Task Switcher"
+add_task "Set animation speed | General Behaviour | Increase Animation Speed by 4 points"
+add_task "Disable recent files | Recent Files | Disable remembering recent files and clear list"
+add_task "Enable spell check | Spell Check | Ensure automatic spell checking is enabled"
+add_task "Set user email | Users | Set user email (e.g., for Git or system identity)"
+add_task "Set session restore | Session | Enable 'Restore previous session on login'"
+add_task "Setting hardware drivers | Manjaro Settings Manager | Go to Hardware Configurations and select auto install options one after another"
+add_task "Configure Dolphin | Dolphin File Manager | Show all hidden files and change layout from icons to details"
+add_task "Add/remove software | Preference | Enable 'Hide system tray when no updates' option"
+add_task "Copy data from HDD | Data Transfer | Copy required data from HDD to appropriate location"
+add_task "Enable KeepassXC Connect DB| KeepassXC | Enable database connection and browser integration"
+add_task "Login to Ferdium | Ferdium | Open Ferdium and login with user credentials"
+add_task "Install Windows in VBox | Virtualization | Install Windows OS inside VirtualBox"
+add_task "Add AIM RDP in Remmina | Remmina | Configure AIM RDP connection in Remmina"
+add_task "Add Local/Prod DB in DBeaver| DBeaver | Configure Local and Production databases in DBeaver"
+add_task "Add company email in Thunderbird | Thunderbird | Setup company email account in Thunderbird"
+add_task "Login to Chrome | Chrome | Login to Chrome browser with user account"
+add_task "Set Firefox/Dev session restore | Firefox | Configure both Firefox and Firefox Developer to restore previous session tabs"
+add_task "VS Code login with GitHub | VS Code | Login to VS Code and enable GitHub backup"
+add_task "Void connect the OLLAMA | Void | Connect Void app to OLLAMA service"
+add_task "Postman login with Google | Postman | Login to Postman using Google account"
 
-declare -A task4=(
-  [title]="Enable raise max volume"
-  [category]="Sound"
-  [action]="Enable 'Allow volume above 100%'"
-)
+# --- End of tasks ---
 
-declare -A task5=(
-  [title]="Enable night light"
-  [category]="Colors & Theme"
-  [action]="Enable Night Light with Custom Schedule"
-)
-
-declare -A task6=(
-  [title]="Set default browser"
-  [category]="Default Applications"
-  [action]="Set default browser (e.g., Firefox)"
-)
-
-declare -A task7=(
-  [title]="Set task switcher"
-  [category]="Window Management"
-  [action]="Choose 'Flip Switch' for Task Switcher"
-)
-
-declare -A task8=(
-  [title]="Set animation speed"
-  [category]="General Behaviour"
-  [action]="Increase Animation Speed by 4 points"
-)
-
-declare -A task9=(
-  [title]="Disable recent files"
-  [category]="Recent Files"
-  [action]="Disable remembering recent files and clear list"
-)
-
-declare -A task10=(
-  [title]="Enable spell check"
-  [category]="Spell Check"
-  [action]="Ensure automatic spell checking is enabled"
-)
-
-declare -A task11=(
-  [title]="Set user email"
-  [category]="Users"
-  [action]="Set user email (e.g., for Git or system identity)"
-)
-
-declare -A task12=(
-  [title]="Set session restore"
-  [category]="Session"
-  [action]="Enable 'Restore previous session on login'"
-)
-
-declare -A task13=(
-  [title]="Setting hardware drivers"
-  [category]="Manjaro Settings Manager"
-  [action]="Go to Hardware Configurations and select auto install options one after another"
-)
-
-declare -A task14=(
-  [title]="Configure Dolphin"
-  [category]="Dolphin File Manager"
-  [action]="Show all hidden files and change layout from icons to details"
-)
-
-declare -A task15=(
-  [title]="Add/remove software"
-  [category]="Preference"
-  [action]="Enable 'Hide system tray when no updates' option"
-)
-
-declare -A task16=(
-  [title]="Copy data from HDD"
-  [category]="Data Transfer"
-  [action]="Copy required data from HDD to appropriate location"
-)
-
-declare -A task17=(
-  [title]="Enable KeepassXC Connect DB"
-  [category]="KeepassXC"
-  [action]="Enable database connection and browser integration"
-)
-
-declare -A task18=(
-  [title]="Login to Ferdium"
-  [category]="Ferdium"
-  [action]="Open Ferdium and login with user credentials"
-)
-
-declare -A task19=(
-  [title]="Install Windows in VirtualBox"
-  [category]="Virtualization"
-  [action]="Install Windows OS inside VirtualBox"
-)
-
-declare -A task20=(
-  [title]="Add AIM RDP in Remmina"
-  [category]="Remmina"
-  [action]="Configure AIM RDP connection in Remmina"
-)
-
-declare -A task21=(
-  [title]="Add Local DB and Production DB in DBeaver"
-  [category]="DBeaver"
-  [action]="Configure Local and Production databases in DBeaver"
-)
-
-declare -A task22=(
-  [title]="Add company email in Thunderbird"
-  [category]="Thunderbird"
-  [action]="Setup company email account in Thunderbird"
-)
-
-declare -A task23=(
-  [title]="Login to Chrome"
-  [category]="Chrome"
-  [action]="Login to Chrome browser with user account"
-)
-
-declare -A task24=(
-  [title]="Set Firefox & Firefox Developer to open previous tabs"
-  [category]="Firefox"
-  [action]="Configure both Firefox and Firefox Developer editions to restore previous session tabs"
-)
-
-declare -A task25=(
-  [title]="VS Code login with GitHub backup"
-  [category]="VS Code"
-  [action]="Login to VS Code and enable GitHub backup"
-)
-
-declare -A task26=(
-  [title]="Void Connect the OLLAMA"
-  [category]="Void"
-  [action]="Connect Void app to OLLAMA service"
-)
-
-declare -A task27=(
-  [title]="Postman login with Google"
-  [category]="Postman"
-  [action]="Login to Postman using Google account"
-)
-
-# Store all task variable names in a list
-task_list=(task1 task2 task3 task4 task5 task6 task7 task8 task9 task10 task11 task12 task13 task14 task15 task16 task17 task18 task19 task20 task21 task22 task23 task24 task25 task26 task27)
-status=()
+# Store task statuses
+declare -a status=()
 
 echo "============================================"
 echo "   🛠️  Interactive System Setup Checklist"
@@ -173,25 +52,20 @@ echo "============================================"
 echo "Answer with [y]es or [n]o"
 echo
 
-# Loop through each task
-for task_var in "${task_list[@]}"; do
-  eval "title=\${$task_var[title]}"
-  eval "category=\${$task_var[category]}"
-  eval "action=\${$task_var[action]}"
-
-  echo "🔹 Task:     $title"
-  echo "   🗂  Menu:  $category"
-  echo "   📋 Action: $action"
-
+# Interactive main loop
+for i in "${!tasks[@]}"; do
+  IFS=" | " read -r title category action <<< "${tasks[$i]}"
+  printf "🔹 Task:     %s\n" "$title"
+  printf "   🗂  Menu:  %s\n" "$category"
+  printf "   📋 Action: %s\n" "$action"
   while true; do
     read -p "   ✅ Done? (y/n): " input
     case "$input" in
-      [Yy]) status+=("✔️ Done") ; break ;;
-      [Nn]) status+=("❌ Skipped") ; break ;;
+      [Yy]) status[$i]="✔️ Done" ; break ;;
+      [Nn]) status[$i]="❌ Skipped" ; break ;;
       *) echo "   ⚠️  Please enter y or n." ;;
     esac
   done
-
   echo
 done
 
@@ -199,10 +73,9 @@ done
 echo "============================================"
 echo "                 ✅ Summary"
 echo "============================================"
-for i in "${!task_list[@]}"; do
-  task_var=${task_list[$i]}
-  eval "title=\${$task_var[title]}"
-  printf "%2d. %-30s %s\n" $((i+1)) "$title" "${status[$i]}"
+for i in "${!tasks[@]}"; do
+  IFS=" | " read -r title _ _ <<< "${tasks[$i]}"
+  printf "%2d. %-35s %s\n" $((i+1)) "$title" "${status[$i]}"
 done
 
 echo

@@ -1,31 +1,40 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-# === Logger & Platform Detection ===
+##############################################################################
+# 06-kde-taskbar-pinning-setup.sh
+#   - Automatically pins favorite apps to KDE Plasma taskbar (Task Manager)
+#   - Clean rollback and backup support
+#   - Idempotent, declarative, and self-documenting
+##############################################################################
+
+### ─── Logger & Platform Detection ─────────────────────────────────────────
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
     echo "Logger library not found! Exiting." >&2
     exit 1
 fi
-if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
-    echo "Platform library not found! Exiting." >&2
-    exit 1
-fi
-
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
+
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
+    fail "Platform library not found! Exiting."
+fi
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
 ensure_supported_platform arch manjaro
 
-section "📌 Auto-pinning favorite apps to KDE Task Manager"
+section "📌 KDE Task Manager Pinning Setup for $PLATFORM_STRING"
 
-# === Detect KDE/Plasma Session ===
+### ─── Detect KDE/Plasma Session ──────────────────────────────────────────
+
 if [[ "${XDG_CURRENT_DESKTOP:-}" != *"KDE"* && "${DESKTOP_SESSION:-}" != *"plasma"* ]]; then
     fail "Not a KDE Plasma session. Aborting."
 fi
 
-# === Rollback Option ===
+### ─── Rollback Option ────────────────────────────────────────────────────
+
 APPLETSRC="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
 if [[ "${1:-}" == "--uninstall" ]]; then
     section "♻️ Restoring previous KDE taskbar backup..."
@@ -43,7 +52,9 @@ if [[ "${1:-}" == "--uninstall" ]]; then
     fi
 fi
 
-# === App names to match (user can override via env or CLI) ===
+### ─── Application List Setup ─────────────────────────────────────────────
+
+# Allow override via PIN_APPS env or --apps flag
 if [[ -n "${PIN_APPS:-}" ]]; then
     IFS=, read -ra APP_NAMES <<< "$PIN_APPS"
 else
@@ -81,6 +92,7 @@ declare -A APP_NAME_FALLBACKS=(
     ["IntelliJ IDEA Community Edition"]="idea.desktop"
 )
 
+# CLI flag: --apps=comma,separated,list
 for arg in "$@"; do
     case "$arg" in
         --apps=*) IFS=, read -ra APP_NAMES <<< "${arg#*=}" ;;
@@ -89,6 +101,8 @@ done
 
 declare -a FOUND_LAUNCHERS PINNED
 
+### ─── Discover Desktop Launcher Files ────────────────────────────────────
+
 log "🔍 Searching for .desktop launchers..."
 for name in "${APP_NAMES[@]}"; do
     file_name=""
@@ -96,24 +110,19 @@ for name in "${APP_NAMES[@]}"; do
     # Try auto-discovery
     search_paths=(/usr/share/applications)
     user_app_dir="$HOME/.local/share/applications"
-
     [[ -d "$user_app_dir" ]] && search_paths+=("$user_app_dir")
 
     desktop_file=$(find "${search_paths[@]}" -type f -iname "*${name}*.desktop" 2>/dev/null | head -n1)
     if [[ -n "$desktop_file" ]]; then
         file_name=$(basename "$desktop_file")
         ok "Found launcher for '$name' → $file_name"
-
-    # Fallback if not found
     elif [[ -n "${APP_NAME_FALLBACKS[$name]:-}" ]]; then
         file_name="${APP_NAME_FALLBACKS[$name]}"
         warn "Used fallback for '$name' → $file_name"
-
     else
         warn "No launcher found for '$name'"
     fi
 
-    # Only add if we have a resolved .desktop filename
     if [[ -n "$file_name" ]]; then
         FOUND_LAUNCHERS+=("applications:${file_name}")
         PINNED+=("$name")
@@ -124,19 +133,20 @@ if [[ ${#FOUND_LAUNCHERS[@]} -eq 0 ]]; then
     fail "No .desktop files found — aborting taskbar pinning"
 fi
 
-# === Always backup config ===
+### ─── Backup Current Config ──────────────────────────────────────────────
+
 BACKUP="$APPLETSRC.bak.$(date +%s)"
 cp "$APPLETSRC" "$BACKUP" || fail "Failed to backup plasma config"
 ok "💾 Backed up plasma config to $BACKUP"
 
-# === Find Task Manager Configuration Section ===
-SECTION_LINE=$(grep -n "^\[Containments\].*\[Applets\].*\[Configuration\]\[General\]" "$APPLETSRC" | cut -d: -f1 | head -n1)
+### ─── Locate and Patch Task Manager Section ──────────────────────────────
 
+# Use awk to replace 'launchers=' in [General] config section.
+SECTION_LINE=$(grep -n "^\[Containments\].*\[Applets\].*\[Configuration\]\[General\]" "$APPLETSRC" | cut -d: -f1 | head -n1)
 if [[ -z "$SECTION_LINE" ]]; then
     fail "Could not locate [General] config section in $APPLETSRC"
 fi
 
-# === Replace launchers line ===
 NEW_LAUNCHERS_LINE="launchers=$(IFS=,; echo "${FOUND_LAUNCHERS[*]}")"
 
 awk -v section_line="$SECTION_LINE" -v new_line="$NEW_LAUNCHERS_LINE" '
@@ -147,7 +157,8 @@ in_section && /^launchers=/ { print new_line; in_section = 0; next }
 
 ok "Pinned applications updated in KDE Task Manager"
 
-# === Restart Plasma Shell ===
+### ─── Restart Plasma Shell ───────────────────────────────────────────────
+
 log "🔄 Restarting Plasma shell..."
 kquitapp5 plasmashell || warn "Failed to quit plasmashell gracefully"
 kstart5 plasmashell || fail "Failed to start plasmashell"
@@ -156,3 +167,5 @@ section "📋 Final Pinned Applications"
 log "🟢 Pinned: ${PINNED[*]}"
 
 ok "🎉 KDE taskbar pinned apps refreshed successfully!"
+
+# End of script. Your desktop is now fully corporate-pilled.

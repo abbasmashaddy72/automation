@@ -1,29 +1,41 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-# === Include Logging & Platform Detection ===
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+##############################################################################
+# 01-system-setup.sh
+#   - Modular, robust system setup for all Arch-based distros
+#   - Handles mirrors, upgrades, fstrim, swappiness, UFW, GRUB, and more
+#   - Requires: lib-logger.sh, lib-platform.sh in ../lib/
+##############################################################################
 
-if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
+### ─── Library Checks and Bootstrap ────────────────────────────────────────
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIBDIR="$SCRIPT_DIR/../lib"
+
+if [[ ! -f "$LIBDIR/lib-logger.sh" ]]; then
     echo "Logger library not found! Exiting." >&2
     exit 1
 fi
-if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
-    echo "Platform library not found! Exiting." >&2
-    exit 1
+source "$LIBDIR/lib-logger.sh"
+
+if [[ ! -f "$LIBDIR/lib-platform.sh" ]]; then
+    fail "Platform library not found! Exiting."
+fi
+source "$LIBDIR/lib-platform.sh"
+
+ensure_supported_platform arch
+
+section "🛠 Starting System Setup for $PLATFORM_STRING"
+
+### ─── Sudo Password Prompt Upfront ────────────────────────────────────────
+
+log "🔐 Please enter your sudo password to begin..."
+if ! sudo -v; then
+    fail "❌ Failed to authenticate sudo."
 fi
 
-source "$SCRIPT_DIR/../lib/lib-logger.sh"
-source "$SCRIPT_DIR/../lib/lib-platform.sh"
-
-# === Require Supported Platform ASAP ===
-ensure_supported_platform arch manjaro
-
-# Use PLATFORM_STRING only after platform check
-section "🔧 Starting System Setup for $PLATFORM_STRING"
-log "Detected platform: $PLATFORM_STRING"
-
-# === Functions for Modular Steps ===
+### ─── Modular System Setup Functions ──────────────────────────────────────
 
 update_mirrors() {
     log "📡 Updating pacman mirrors..."
@@ -150,7 +162,7 @@ enable_aur_support() {
     ok "AUR support and update checking enabled."
 }
 
-# === Execute Modular Steps ===
+### ─── Main System Setup Sequence ─────────────────────────────────────────
 
 update_mirrors
 full_system_upgrade
@@ -163,3 +175,5 @@ install_language_tools
 enable_aur_support
 
 ok "🎉 System setup completed successfully!"
+
+# End of script. Your system is fresh, optimized, and ready for greatness.

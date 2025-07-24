@@ -1,26 +1,34 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-# === Logger & Platform Detection ===
+##############################################################################
+# 05-laravel-project-sites-setup.sh
+#   - Creates opinionated directory structure for Laravel/Valet dev workflow
+#   - Parks Laravel Valet in selected folders automatically
+#   - Compatible with any Arch-based distro
+##############################################################################
+
+### ─── Logger & Platform Detection ─────────────────────────────────────────
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
     echo "Logger library not found! Exiting." >&2
     exit 1
 fi
-if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
-    echo "Platform library not found! Exiting." >&2
-    exit 1
-fi
-
 source "$SCRIPT_DIR/../lib/lib-logger.sh"
+
+if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
+    fail "Platform library not found! Exiting."
+fi
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
 ensure_supported_platform arch manjaro
 
-section "📁 Setting up Laravel-friendly Project Sites"
+section "📁 Laravel Project Sites Setup for $PLATFORM_STRING"
 
-# === Config: Allow user to set base dir ===
+### ─── Config: Root Directory ─────────────────────────────────────────────
+
 ROOT_DIR="${PROJECT_SITES_DIR:-$HOME/Documents/Project-Sites}"
 
 for arg in "$@"; do
@@ -50,11 +58,13 @@ PARKABLE_SUBDIRS=(
 
 declare -a created_dirs existing_dirs parked_dirs
 
-# === Create Root Directory ===
+### ─── Create Root Directory ──────────────────────────────────────────────
+
 log "📂 Creating root directory: $ROOT_DIR"
 mkdir -p "$ROOT_DIR" || fail "Could not create root directory: $ROOT_DIR"
 
-# === Create Subdirectories (idempotent) ===
+### ─── Create Subdirectories (idempotent) ────────────────────────────────
+
 for subdir in "${SUBDIRS[@]}"; do
     path="$ROOT_DIR/$subdir"
     if [[ -d "$path" ]]; then
@@ -66,7 +76,8 @@ for subdir in "${SUBDIRS[@]}"; do
     fi
 done
 
-# === Valet Park Check ===
+### ─── Valet Parking ─────────────────────────────────────────────────────
+
 if ! command -v valet &>/dev/null; then
     fail "Laravel Valet is not installed. Cannot park folders."
 fi
@@ -81,10 +92,13 @@ for dir in "${PARKABLE_SUBDIRS[@]}"; do
     ok "Valet parked in: $dir"
 done
 
-# === Print Summary ===
+### ─── Print Summary ─────────────────────────────────────────────────────
+
 section "📋 Project Sites Setup Summary"
 [[ ${#created_dirs[@]} -gt 0 ]] && log "🟢 Created: ${created_dirs[*]}"
 [[ ${#existing_dirs[@]} -gt 0 ]] && warn "🟡 Already existed: ${existing_dirs[*]}"
 [[ ${#parked_dirs[@]} -gt 0 ]] && ok "🚗 Valet parked in: ${parked_dirs[*]}"
 
 ok "🎉 Project Sites structure created and valet parked successfully!"
+
+# End of script. You’re now ready for Laravel dev, the corporate way.

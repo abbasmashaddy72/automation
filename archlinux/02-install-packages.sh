@@ -1,59 +1,138 @@
-#!/bin/bash
-
-# === Configurable Debug and Verbosity ===
-DEBUG="${DEBUG:-0}"
-SILENT="${SILENT:-0}"
-
-# === Optional Debug Mode (prints every command) ===
-[[ "$DEBUG" == "1" ]] && set -x
-
-# === Safe Bash Settings ===
+#!/usr/bin/env bash
 set -euo pipefail
 
-# === Trap to Show Last Failing Command (for diagnostics) ===
-trap 'echo -e "\n❌ Script failed at line $LINENO while running: $BASH_COMMAND (exit code: $?)" >&2' ERR
+##############################################################################
+# 02-install-packages.sh
+#   - One unified, self-documenting installer for all your dev tools and basics
+#   - Works on ANY Arch-based distro (Arch, Manjaro, Garuda, CachyOS, AxOS, etc)
+#   - Handles all dependencies non-interactively; picks best AUR helper
+#   - Maintains clear logs, handles idempotency, and is ultra-maintainable
+##############################################################################
 
-# === Include Logger & Platform Detection ===
+### ─── Library Checks and Bootstrap ────────────────────────────────────────
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIBDIR="$SCRIPT_DIR/../lib"
 
-if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
+if [[ ! -f "$LIBDIR/lib-logger.sh" ]]; then
     echo "Logger library not found! Exiting." >&2
     exit 1
 fi
-if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
-    echo "Platform library not found! Exiting." >&2
-    exit 1
+source "$LIBDIR/lib-logger.sh"
+
+if [[ ! -f "$LIBDIR/lib-platform.sh" ]]; then
+    fail "Platform library not found! Exiting."
 fi
+source "$LIBDIR/lib-platform.sh"
 
-source "$SCRIPT_DIR/../lib/lib-logger.sh"
-source "$SCRIPT_DIR/../lib/lib-platform.sh"
+if [[ ! -f "$LIBDIR/lib-aur-helper.sh" ]]; then
+    fail "AUR helper library not found! Exiting."
+fi
+source "$LIBDIR/lib-aur-helper.sh"
 
-section "📦 System package installation for $PLATFORM_STRING"
-ensure_supported_platform arch manjaro
+ensure_supported_platform arch
 
-# === Interactive Sudo Prompt ===
+section "📦 Universal Package Installation for $PLATFORM_STRING"
+
+### ─── Sudo Password Prompt Upfront ────────────────────────────────────────
+
 echo "🔐 Please enter your sudo password to begin..."
 if ! sudo -v; then
-    echo "❌ Failed to authenticate sudo." >&2
-    exit 1
+    fail "❌ Failed to authenticate sudo."
 fi
 
-# === Arrays for tracking ===
+### ─── Detect and/or Install AUR Helper ────────────────────────────────────
+
+AUR_HELPER="$(detect_aur_helper)"
+if [[ "$AUR_HELPER" == "none" ]]; then
+    section "🔄 No AUR helper found! Installing yay for AUR support..."
+    sudo pacman -S --needed --noconfirm yay || fail "Failed to install yay!"
+    AUR_HELPER="yay"
+fi
+ok "AUR helper selected: $AUR_HELPER"
+
+### ─── Unified Package List (Official and AUR) ─────────────────────────────
+
+all_packages=(
+    # --- Browsers ---
+    brave-browser                       # Chromium-based alternative
+    firefox                             # Mainstream open-source browser
+    firefox-developer-edition           # Developer-focused browser
+    google-chrome                       # Google Chrome
+
+    # --- IDEs ---
+    intellij-idea-community-edition     # Java IDE
+    pycharm-community-edition           # Python IDE
+    android-studio                      # Android development IDE
+    visual-studio-code-bin              # Code editor
+
+    # --- Database & Data Tools ---
+    dbeaver                             # Database GUI
+    postman-bin                         # API testing tool
+    tiny-rdm-bin                        # Redis GUI
+
+    # --- Office & Communication ---
+    onlyoffice-desktopeditors           # Office suite
+    thunderbird                         # Email client
+    ferdium                             # Unified messenger
+
+    # --- Security & Passwords ---
+    keepassxc                           # Password manager
+
+    # --- File/Sync/Remote Tools ---
+    winscp                              # SFTP client
+    remmina                             # RDP/VNC client
+    freerdp                             # Remote desktop protocol
+    anydesk-bin                         # Remote desktop
+
+    # --- Utility Apps ---
+    meld                                # Diff/merge tool
+    peek                                # GIF screen recorder
+    vlc                                 # Media player
+    void-bin                            # AI terminal
+
+    # --- Virtualization ---
+    virtualbox                          # Hypervisor
+    virtualbox-guest-iso                # Guest ISO support
+    virtualbox-guest-utils              # Guest utils
+
+    # --- Fonts ---
+    ttf-jetbrains-mono                  # JetBrains Mono Font
+    ttf-hack-nerd                       # Hack Nerd Font
+
+    # --- System & CLI Tools ---
+    base-devel                          # Essential dev tools
+    curl                                # HTTP CLI tool
+    tree                                # Directory tree viewer
+    unzip                               # Archive extractor
+    zip                                 # Archive compressor
+    deluge-gtk                          # Torrent client
+    ventoy                              # Bootable USB creator
+    scrcpy                              # Android screen mirroring
+    usbmuxd                             # iOS USB communication
+
+    # --- Mobile / iOS Development ---
+    android-tools                       # adb, fastboot
+    gvfs-afc                            # iDevice mounter
+    ifuse                               # FUSE for Apple devices
+    libimobiledevice                    # iOS sync/access utility
+)
+
+### ─── Status Arrays ──────────────────────────────────────────────────────
+
 declare -a installed_packages already_present failed_packages
 installed_packages=()
 already_present=()
 failed_packages=()
 
-# === Install Helpers ===
-is_installed_pacman() { pacman -Qi "$1" &>/dev/null; }
-is_installed_pamac() {
-    local pkg="$1"
-    pacman -Q "$pkg" &>/dev/null
-}
+### ─── Installer Functions ────────────────────────────────────────────────
+
+is_installed() { pacman -Q "$1" &>/dev/null; }
+is_pacman_available() { pacman -Si "$1" &>/dev/null; }
 
 install_with_pacman() {
     local pkg="$1"
-    echo "📦 Installing $pkg via pacman..."
+    log "📦 Installing $pkg via pacman..."
     if sudo pacman -S --needed --noconfirm "$pkg"; then
         installed_packages+=("$pkg")
         ok "$pkg installed (pacman)"
@@ -63,154 +142,53 @@ install_with_pacman() {
     fi
 }
 
-install_with_pamac() {
+install_with_aur() {
     local pkg="$1"
-    echo "📦 Installing $pkg via pamac..."
-
-    if pamac install --no-confirm "$pkg"; then
+    log "📦 Installing $pkg via $AUR_HELPER..."
+    if aur_install "$pkg"; then
         if pacman -Q "$pkg" &>/dev/null; then
             installed_packages+=("$pkg")
-            ok "$pkg installed (verified via pacman)"
+            ok "$pkg installed ($AUR_HELPER)"
         else
             failed_packages+=("$pkg")
-            warn "❌ $pkg not found via pacman after pamac install"
+            warn "❌ $pkg failed to install via $AUR_HELPER"
         fi
     else
         failed_packages+=("$pkg")
-        warn "❌ $pkg failed to install via pamac"
+        warn "❌ $pkg failed to install via $AUR_HELPER"
     fi
 }
 
-install_package() {
-    local package="$1"
-    local manager="$2"
+### ─── Main Install Loop ──────────────────────────────────────────────────
 
-    if [[ "$manager" == "pacman" ]]; then
-        if is_installed_pacman "$package"; then
-            already_present+=("$package")
-            if [[ "${DEBUG:-}" == "1" ]]; then
-                ok "$package already installed (pacman)"
-            fi
-        else
-            install_with_pacman "$package"
-        fi
-    elif [[ "$manager" == "pamac" ]]; then
-        if is_installed_pamac "$package"; then
-            already_present+=("$package")
-            if [[ "${DEBUG:-}" == "1" ]]; then
-                ok "$package already installed (pamac)"
-            fi
-        else
-            install_with_pamac "$package"
-        fi
+section "🛠 Installing All Packages..."
+
+for pkg in "${all_packages[@]}"; do
+    if is_installed "$pkg"; then
+        already_present+=("$pkg")
+        ok "$pkg already installed"
+    elif is_pacman_available "$pkg"; then
+        install_with_pacman "$pkg"
     else
-        failed_packages+=("$package")
-        warn "Unknown package manager: $manager for $package"
+        install_with_aur "$pkg"
     fi
-}
+done
 
-# === Official Repository Packages ===
-pacman_packages=(
-    # Browsers
-    brave-browser                       # Browser: Chromium-based alternative
-    firefox                             # Browser: Mainstream open-source browser
-    firefox-developer-edition           # Browser: Developer-focused browser
+### ─── Installation Summary (Logs) ────────────────────────────────────────
 
-    # IDEs and Dev Tools
-    dbeaver                             # Dev Tool: Database GUI
-    intellij-idea-community-edition     # IDE: Java development
-    keepassxc                           # Dev Tool: Password manager
-    meld                                # Dev Tool: Diff/merge tool
-    onlyoffice-desktopeditors           # Utility: Office suite
-    peek                                # Dev Tool: GIF screen recorder
-    pycharm-community-edition           # IDE: Python
-    remmina                             # Dev Tool: RDP/VNC client
-    thunderbird                         # Utility: Email client
-    virtualbox                          # Virtualization: Hypervisor
-    virtualbox-guest-iso                # Virtualization: Guest ISO support
-    virtualbox-guest-utils              # Virtualization: Guest utils
-    vlc                                 # Utility: Media player
-
-    # Utilities & CLI Tools
-    curl                                # CLI: HTTP tool
-    deluge-gtk                          # Utility: Torrent client
-    freerdp                             # Utility: Remote desktop protocol
-    scrcpy                              # Utility: Android screen mirroring
-    tree                                # CLI: Directory tree viewer
-    unzip                               # CLI: Archive extractor
-    usbmuxd                             # iOS: USB communication
-    ventoy                              # Utility: Bootable USB creator
-    zip                                 # CLI: Archive compressor
-    ttf-jetbrains-mono                  # Font: JetBrains Mono Font
-    ttf-hack-nerd                       # Font: Hack Nerd Font
-    base-devel                          # Base: Essential development tools
-
-    # Mobile / iOS Development
-    android-tools                       # Mobile: adb, fastboot
-    gvfs-afc                            # iOS: iDevice mounter
-    ifuse                               # iOS: FUSE for Apple devices
-    libimobiledevice                    # iOS: Sync/access utility
-)
-
-# === AUR / Pamac Packages ===
-pamac_packages=(
-    android-studio                      # IDE: Android development
-    anydesk-bin                         # Utility: Remote desktop
-    ferdium                             # Utility: Unified messenger
-    google-chrome                       # Browser: Google Chrome
-    postman-bin                         # Dev Tool: API testing
-    visual-studio-code-bin              # IDE: Code editor
-    void-bin                            # Dev Tool: AI terminal
-    winscp                              # Utility: SFTP client
-    tiny-rdm-bin                        # Utility: Redis GUI
-)
-
-# === Package Parameterization ===
-if [[ $# -gt 0 ]]; then
-    section "🎯 Installing requested packages: $*"
-    targets=("$@")
-    for pkg in "${targets[@]}"; do
-        if [[ " ${pacman_packages[*]} " == *" $pkg "* ]]; then
-            install_package "$pkg" "pacman"
-        elif [[ " ${pamac_packages[*]} " == *" $pkg "* ]]; then
-            install_package "$pkg" "pamac"
-        else
-            warn "Unknown package: $pkg"
-            failed_packages+=("$pkg")
-        fi
-    done
-else
-    section "📦 Installing official (pacman) packages..."
-    for package in "${pacman_packages[@]}"; do
-        install_package "$package" "pacman"
-    done
-
-    section "📦 Installing AUR (pamac) packages..."
-    if command -v pamac &>/dev/null; then
-        for package in "${pamac_packages[@]}"; do
-            install_package "$package" "pamac"
-        done
-    else
-        warn "⚠ pamac is not installed. Skipping AUR packages."
-    fi
-fi
-
-# === Final Summary ===
 section "📊 Installation Summary"
-
 if (( ${#installed_packages[@]} > 0 )); then
     log "🟢 Newly installed: ${installed_packages[*]}"
 fi
-
 if (( ${#already_present[@]} > 0 )); then
     log "🟡 Already present: ${already_present[*]}"
 fi
-
 if (( ${#failed_packages[@]} > 0 )); then
     warn "🔴 Failed to install: ${failed_packages[*]}"
 fi
 
-# === VirtualBox group handling ===
+### ─── Special Handling: VirtualBox Group Membership ──────────────────────
+
 if [[ " ${installed_packages[*]} " == *" virtualbox "* ]] || \
    [[ " ${installed_packages[*]} " == *" virtualbox-guest-utils "* ]] || \
    [[ " ${installed_packages[*]} " == *" virtualbox-guest-iso "* ]]; then
@@ -224,4 +202,6 @@ if [[ " ${installed_packages[*]} " == *" virtualbox "* ]] || \
     fi
 fi
 
-ok "🎉 All requested system packages processed for $PLATFORM_STRING!"
+ok "🎉 All packages processed for $PLATFORM_STRING!"
+
+# End of script. Go grab some coffee and let the automation work for you.

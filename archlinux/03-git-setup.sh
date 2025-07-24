@@ -1,59 +1,86 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-# === Logger & Platform Detection ===
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+##############################################################################
+# 03-git-setup.sh
+#   - Automated, idempotent Git setup for any Arch-based system
+#   - Handles install (repo & AUR), backup, config, and credentials
+#   - Self-documents all actions via logger library
+##############################################################################
 
-if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
+### ─── Library Load and Platform Detection ────────────────────────────────
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIBDIR="$SCRIPT_DIR/../lib"
+
+if [[ ! -f "$LIBDIR/lib-logger.sh" ]]; then
     echo "Logger library not found! Exiting." >&2
     exit 1
 fi
-if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
-    echo "Platform library not found! Exiting." >&2
-    exit 1
+source "$LIBDIR/lib-logger.sh"
+
+if [[ ! -f "$LIBDIR/lib-platform.sh" ]]; then
+    fail "Platform library not found! Exiting."
 fi
+source "$LIBDIR/lib-platform.sh"
 
-source "$SCRIPT_DIR/../lib/lib-logger.sh"
-source "$SCRIPT_DIR/../lib/lib-platform.sh"
+if [[ ! -f "$LIBDIR/lib-aur-helper.sh" ]]; then
+    fail "AUR helper library not found! Exiting."
+fi
+source "$LIBDIR/lib-aur-helper.sh"
 
-# === Distro check: Only run on supported systems ===
-ensure_supported_platform arch manjaro
+ensure_supported_platform arch
+
+AUR_HELPER="$(detect_aur_helper)"
+if [[ "$AUR_HELPER" == "none" ]]; then
+    section "🔄 No AUR helper found! Installing yay for AUR support..."
+    sudo pacman -S --needed --noconfirm yay || fail "Failed to install yay!"
+    AUR_HELPER="yay"
+fi
+ok "AUR helper selected: $AUR_HELPER"
 
 section "📦 Starting Git setup for $PLATFORM_STRING"
 
-# === Check Git Installation (Pacman first) ===
-if ! command -v git &>/dev/null; then
+### ─── Install Git (repo first, then AUR helper if needed) ────────────────
+
+install_git() {
+    if command -v git &>/dev/null; then
+        ok "Git already installed"
+        return 0
+    fi
     log "🔹 Installing git (pacman preferred)..."
     if sudo pacman -S --noconfirm --needed git; then
         ok "Git installed via pacman"
-    elif command -v pamac &>/dev/null; then
-        pamac install --no-confirm --needed git || fail "Git installation failed via pamac"
-        ok "Git installed via pamac"
-    else
-        fail "Git installation failed: pacman and pamac both unavailable"
+        return 0
     fi
-else
-    ok "Git already installed"
-fi
+    aur_install git && ok "Git installed via $AUR_HELPER" && return 0
+    fail "Git installation failed: pacman and $AUR_HELPER both unavailable"
+}
+install_git
 
-# === Prompt for Git Details ===
-while true; do
-    read -rp "👤 Enter your Git username: " git_username
-    git_username=$(echo "$git_username" | xargs)
-    [[ -n "$git_username" ]] && break
-    warn "Git username cannot be empty."
-done
+### ─── Prompt for User Details ────────────────────────────────────────────
 
-while true; do
-    read -rp "📧 Enter your Git email: " git_email
-    git_email=$(echo "$git_email" | xargs)
-    if [[ "$git_email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
-        break
-    fi
-    warn "Invalid or empty email. Please enter a valid email address."
-done
+prompt_git_user_details() {
+    while true; do
+        read -rp "👤 Enter your Git username: " git_username
+        git_username=$(echo "$git_username" | xargs)
+        [[ -n "$git_username" ]] && break
+        warn "Git username cannot be empty."
+    done
+    while true; do
+        read -rp "📧 Enter your Git email: " git_email
+        git_email=$(echo "$git_email" | xargs)
+        if [[ "$git_email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+            break
+        fi
+        warn "Invalid or empty email. Please enter a valid email address."
+    done
+    export git_username git_email
+}
+prompt_git_user_details
 
-# === Backup Existing .gitconfig ===
+### ─── Backup Existing Config ─────────────────────────────────────────────
+
 GITCONFIG="$HOME/.gitconfig"
 backup=""
 if [[ -f "$GITCONFIG" ]]; then
@@ -62,39 +89,45 @@ if [[ -f "$GITCONFIG" ]]; then
     ok "Backed up existing .gitconfig to $backup"
 fi
 
-# === Git Credential Manager (Pacman preferred, fallback to pamac) ===
-if ! git config --global credential.helper | grep -q 'manager'; then
-    log "🧩 Installing git-credential-manager (pacman preferred)..."
-    if sudo pacman -S --noconfirm --needed git-credential-manager &>/dev/null; then
-        ok "git-credential-manager installed via pacman"
-    elif command -v pamac &>/dev/null; then
-        pamac install --no-confirm --needed git-credential-manager || warn "Failed to install git-credential-manager via pamac"
-        ok "git-credential-manager installed via pamac"
-    else
-        warn "git-credential-manager not available via pacman or pamac. Consider manual install if needed."
+### ─── Install Git Credential Manager ─────────────────────────────────────
+
+install_credential_manager() {
+    if git config --global credential.helper | grep -q 'manager'; then
+        ok "Git credential manager already configured"
+        return
     fi
 
-    # Try to set if installed
+    log "🧩 Installing git-credential-manager (repo preferred, fallback to AUR)..."
+    if sudo pacman -S --noconfirm --needed git-credential-manager &>/dev/null; then
+        ok "git-credential-manager installed via pacman"
+    else
+        aur_install git-credential-manager && ok "git-credential-manager installed via $AUR_HELPER"
+    fi
+
+    # Configure Git to use it, else fallback
     if command -v git-credential-manager &>/dev/null; then
         git config --global credential.helper manager || warn "Failed to set credential.helper to manager"
     else
         git config --global credential.helper store || warn "Falling back to credential.helper store"
     fi
-else
-    ok "Git credential manager already configured"
-fi
+}
+install_credential_manager
 
-# === Git Configuration ===
+### ─── Set Git Username and Email ─────────────────────────────────────────
+
 log "✍️ Setting Git username and email..."
 git config --global user.name "$git_username" || fail "Failed to set user.name"
 git config --global user.email "$git_email" || fail "Failed to set user.email"
 
-# === Summary ===
+### ─── Summary and Success ────────────────────────────────────────────────
+
 section "🔍 Git configuration summary:"
 git config --list | tee -a "$LOGFILE"
 
 ok "🎉 Git setup complete!"
 
 if [[ -n "$backup" ]]; then
-    warn "To rollback your git config: mv $backup $GITCONFIG" || true
+    warn "To rollback your git config: mv $backup $GITCONFIG"
 fi
+
+# End of script. Go forth and commit with confidence!
