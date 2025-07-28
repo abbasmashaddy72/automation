@@ -5,7 +5,7 @@ set -euo pipefail
 # 03-git-setup.sh
 #   - Automated, idempotent Git setup for any Arch-based system
 #   - Handles install (repo & AUR), backup, config, and credentials
-#   - Self-documents all actions via logger library
+#   - Supports --rollback flag to restore previous config
 ##############################################################################
 
 ### ─── Library Load and Platform Detection ────────────────────────────────
@@ -30,6 +30,26 @@ fi
 source "$LIBDIR/lib-aur-helper.sh"
 
 ensure_supported_platform arch
+
+### ─── Rollback Logic ─────────────────────────────────────────────────────
+
+GITCONFIG="$HOME/.gitconfig"
+if [[ "${1:-}" == "--rollback" ]]; then
+    section "⏪ Rolling back .gitconfig to last backup..."
+    latest_backup=$(ls -1t "$GITCONFIG".backup.* 2>/dev/null | head -n1 || true)
+    if [[ -f "$latest_backup" ]]; then
+        cp -f "$latest_backup" "$GITCONFIG"
+        ok "Restored $GITCONFIG from $latest_backup"
+        section "🔍 Current Git configuration after rollback:"
+        git config --list | tee -a "$LOGFILE"
+        ok "🎉 Rollback complete!"
+        exit 0
+    else
+        fail "No backup found to rollback!"
+    fi
+fi
+
+### ─── AUR Helper Selection ───────────────────────────────────────────────
 
 AUR_HELPER="$(detect_aur_helper)"
 if [[ "$AUR_HELPER" == "none" ]]; then
@@ -81,7 +101,6 @@ prompt_git_user_details
 
 ### ─── Backup Existing Config ─────────────────────────────────────────────
 
-GITCONFIG="$HOME/.gitconfig"
 backup=""
 if [[ -f "$GITCONFIG" ]]; then
     backup="$GITCONFIG.backup.$(date +%Y%m%d%H%M%S)"
@@ -125,9 +144,5 @@ section "🔍 Git configuration summary:"
 git config --list | tee -a "$LOGFILE"
 
 ok "🎉 Git setup complete!"
-
-if [[ -n "$backup" ]]; then
-    warn "To rollback your git config: mv $backup $GITCONFIG"
-fi
 
 # End of script. Go forth and commit with confidence!

@@ -4,11 +4,11 @@ set -euo pipefail
 ##############################################################################
 # 09-ollama-openwebui-setup.sh
 #   - Automated setup for Ollama LLM API + Open WebUI via Docker
-#   - Handles install, Docker group config, service restarts, health checks
-#   - Forward-compatible for automation and manual usage
+#   - Supports multiple Ollama model pulls
+#   - Default model: dolphin3:8b (recommended for coding/general use)
 ##############################################################################
 
-### ─── Logger & Platform Detection ─────────────────────────────────────────
+# ───── Logger & Platform Detection ──────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ ! -f "$SCRIPT_DIR/../lib/lib-logger.sh" ]]; then
@@ -21,25 +21,32 @@ if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
 fi
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
-# === Distro Check: Only Supported Platforms ===
+# ───── Distro Check: Only Supported Platforms ──────────────
+
 ensure_supported_platform arch manjaro
 section "🚀 Starting setup of Ollama + Open WebUI for $PLATFORM_STRING"
 
-### ─── CLI Args and Defaults ──────────────────────────────────────────────
+# ───── CLI Args and Defaults ───────────────────────────────
 
-DEFAULT_MODEL="${OLLAMA_MODEL:-deepseek-r1:8b}"
+DEFAULT_MODELS="dolphin3:8b"
+MODEL_LIST="${OLLAMA_MODELS:-}"
 OPENWEBUI_PORT="${OPENWEBUI_PORT:-3000}"
 UNINSTALL=0
 
 for arg in "$@"; do
     case "$arg" in
-        --model=*) DEFAULT_MODEL="${arg#*=}" ;;
+        --model=*) MODEL_LIST="${arg#*=}" ;;          # legacy single model (now treated as a list of 1)
+        --models=*) MODEL_LIST="${arg#*=}" ;;
         --port=*) OPENWEBUI_PORT="${arg#*=}" ;;
         --uninstall) UNINSTALL=1 ;;
     esac
 done
 
-### ─── Uninstall Routine ──────────────────────────────────────────────────
+if [[ -z "$MODEL_LIST" ]]; then
+    MODEL_LIST="$DEFAULT_MODELS"
+fi
+
+# ───── Uninstall Routine ───────────────────────────────────
 
 if [[ "$UNINSTALL" == "1" ]]; then
     section "🧹 Uninstalling Ollama and Open WebUI Docker setup"
@@ -52,7 +59,7 @@ if [[ "$UNINSTALL" == "1" ]]; then
     exit 0
 fi
 
-### ─── Ensure Docker Installed and Running ────────────────────────────────
+# ───── Ensure Docker Installed and Running ────────────────
 
 if ! command -v docker &>/dev/null; then
     log "📦 Installing Docker..."
@@ -72,7 +79,7 @@ if ! groups "$USER" | grep -qw docker; then
     exit 1
 fi
 
-### ─── Install Ollama (if missing) ───────────────────────────────────────
+# ───── Install Ollama (if missing) ───────────────────────
 
 if ! command -v ollama &>/dev/null; then
     log "📦 Installing Ollama (from official script)..."
@@ -82,7 +89,7 @@ else
     ok "Ollama already installed"
 fi
 
-### ─── Ollama Network Binding ─────────────────────────────────────────────
+# ───── Ollama Network Binding ─────────────────────────────
 
 SERVICE_FILE="/etc/systemd/system/ollama.service"
 ENV_LINE='Environment="OLLAMA_HOST=0.0.0.0"'
@@ -95,7 +102,7 @@ if [[ -f "$SERVICE_FILE" ]] && ! grep -q 'OLLAMA_HOST=0.0.0.0' "$SERVICE_FILE"; 
     ok "OLLAMA_HOST configured and service restarted"
 fi
 
-### ─── Ensure Ollama Running (Port 11434) ────────────────────────────────
+# ───── Ensure Ollama Running (Port 11434) ────────────────
 
 if ! ss -tuln | grep -q ':11434'; then
     log "▶️ Restarting Ollama service..."
@@ -107,7 +114,7 @@ else
     ok "Ollama already running on port 11434"
 fi
 
-### ─── UFW (Firewall) Rules (Optional but Recommended) ───────────────────
+# ───── UFW (Firewall) Rules (Optional) ──────────────────
 
 if command -v ufw &>/dev/null; then
     log "🔐 Configuring UFW for Docker <-> Ollama"
@@ -124,7 +131,7 @@ else
     warn "ufw not found, skipping firewall configuration"
 fi
 
-### ─── Run Open WebUI Docker Container ───────────────────────────────────
+# ───── Run Open WebUI Docker Container ──────────────────
 
 log "🐳 Running Open WebUI Docker container on port $OPENWEBUI_PORT..."
 docker rm -f open-webui &>/dev/null || true
@@ -140,7 +147,7 @@ docker run -d \
 ok "Open WebUI is running at http://localhost:$OPENWEBUI_PORT"
 log "🧠 Ollama is accessible at http://localhost:11434"
 
-### ─── Wait for Open WebUI Container Health ──────────────────────────────
+# ───── Wait for Open WebUI Container Health ──────────────
 
 log "🔎 Waiting for Open WebUI container to report healthy..."
 
@@ -172,7 +179,7 @@ if [[ "$HEALTH_STATUS" != "healthy" ]]; then
   fail "Timed out waiting for Open WebUI to become healthy"
 fi
 
-### ─── HTTP Readiness Probe for Open WebUI ───────────────────────────────
+# ───── HTTP Readiness Probe for Open WebUI ───────────────
 
 log "🔎 Verifying Open WebUI is responding on http://localhost:$OPENWEBUI_PORT..."
 
@@ -184,22 +191,25 @@ for i in {1..10}; do
   sleep 2
 done || fail "Open WebUI did not respond after container became healthy"
 
-### ─── Pull Default Model for Ollama ─────────────────────────────────────
+# ───── Pull All Requested Ollama Models ──────────────────
 
-log "📥 Pulling Ollama model: $DEFAULT_MODEL..."
-if ollama list | grep -q "$DEFAULT_MODEL"; then
-    ok "$DEFAULT_MODEL already pulled"
-else
-    ollama pull "$DEFAULT_MODEL" || fail "Failed to pull model: $DEFAULT_MODEL"
-    ok "$DEFAULT_MODEL pulled successfully"
-fi
+IFS=',' read -ra MODELS <<< "$MODEL_LIST"
+for MODEL in "${MODELS[@]}"; do
+    log "📥 Pulling Ollama model: $MODEL..."
+    if ollama list | grep -q "$MODEL"; then
+        ok "$MODEL already pulled"
+    else
+        ollama pull "$MODEL" || fail "Failed to pull model: $MODEL"
+        ok "$MODEL pulled successfully"
+    fi
+done
 
-### ─── Recap / Output Final Access URLs ──────────────────────────────────
+# ───── Recap / Output Final Access URLs ──────────────────
 
 section "🌐 Access URLs"
 log "🟢 Ollama REST:   http://localhost:11434"
 log "🟢 Open WebUI:    http://localhost:$OPENWEBUI_PORT"
 
-ok "🎉 Ollama + Open WebUI setup complete!"
+ok "🎉 Ollama + Open WebUI setup complete! (Models: ${MODELS[*]})"
 
 # End of script. Your local LLM dev server is now enterprise-class.
