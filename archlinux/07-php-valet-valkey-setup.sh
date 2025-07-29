@@ -131,7 +131,24 @@ enable_php_fpm() {
 
 write_custom_php_ini() {
     section "⚙️ Writing local PHP performance settings"
+
+    # Prompt for custom values with default fallbacks
+    read -p "Enter max upload size (default: 64M): " upload_max_filesize
+    upload_max_filesize="${upload_max_filesize:-64M}"
+
+    read -p "Enter max post size (default: 64M): " post_max_size
+    post_max_size="${post_max_size:-64M}"
+
+    read -p "Enter memory limit (default: 512M): " memory_limit
+    memory_limit="${memory_limit:-512M}"
+
+    read -p "Enter max execution time (default: 300): " max_execution_time
+    max_execution_time="${max_execution_time:-300}"
+
+    # Set the file path for the custom PHP configuration
     CUSTOM_INI="/etc/php/conf.d/custom.ini"
+
+    # Write the configuration values to the custom PHP INI file
     sudo tee "$CUSTOM_INI" >/dev/null <<EOF
 ; Local development PHP optimizations
 
@@ -146,12 +163,66 @@ opcache.fast_shutdown=1
 realpath_cache_size=4096K
 realpath_cache_ttl=600
 
-memory_limit=512M
-max_execution_time=300
-upload_max_filesize=64M
-post_max_size=64M
+memory_limit=$memory_limit
+max_execution_time=$max_execution_time
+upload_max_filesize=$upload_max_filesize
+post_max_size=$post_max_size
 EOF
     ok "Wrote performance config to $CUSTOM_INI"
+}
+
+### ─── Write Custom Nginx Upload Size Configuration ───────────────────────
+
+write_custom_nginx_upload_conf() {
+    section "⚙️ Writing custom Nginx upload size configuration"
+
+    # Prompt for custom Nginx upload size
+    read -p "Enter Nginx max body size (default: 1024M): " nginx_max_body_size
+    nginx_max_body_size="${nginx_max_body_size:-1024M}"
+
+    # Path to the Nginx configuration directory for custom files
+    NGINX_CONF_DIR="/etc/nginx/conf.d"
+    CUSTOM_NGINX_CONF="$NGINX_CONF_DIR/custom_upload.conf"
+
+    # Write custom Nginx config to the new file
+    sudo tee "$CUSTOM_NGINX_CONF" >/dev/null <<EOF
+# Custom Nginx configuration for handling file uploads
+
+client_max_body_size $nginx_max_body_size;
+EOF
+
+    ok "Created custom Nginx configuration: $CUSTOM_NGINX_CONF"
+}
+
+### ─── Write Custom PHP-FPM Configuration ─────────────────────────────────
+
+write_custom_php_fpm_conf() {
+    section "⚙️ Writing custom PHP-FPM upload size and memory limit configuration"
+
+    # Prompt for custom PHP settings
+    read -p "Enter PHP upload_max_filesize (default: 1024M): " upload_max_filesize
+    upload_max_filesize="${upload_max_filesize:-1024M}"
+
+    read -p "Enter PHP post_max_size (default: 1024M): " post_max_size
+    post_max_size="${post_max_size:-1024M}"
+
+    read -p "Enter PHP memory_limit (default: 1024M): " memory_limit
+    memory_limit="${memory_limit:-1024M}"
+
+    # Path to the PHP-FPM configuration directory
+    PHP_FPM_CONF_DIR="/etc/php/php-fpm.d"
+    CUSTOM_PHP_FPM_CONF="$PHP_FPM_CONF_DIR/custom_upload.conf"
+
+    # Create a new PHP-FPM pool configuration for custom values
+    sudo tee "$CUSTOM_PHP_FPM_CONF" >/dev/null <<EOF
+; Custom PHP-FPM configuration for upload size and memory limits
+
+php_admin_value[upload_max_filesize] = $upload_max_filesize
+php_admin_value[post_max_size] = $post_max_size
+php_admin_value[memory_limit] = $memory_limit
+EOF
+
+    ok "Created custom PHP-FPM configuration: $CUSTOM_PHP_FPM_CONF"
 }
 
 ### ─── Enable Extra PHP Extensions ────────────────────────────────────────
@@ -262,6 +333,8 @@ install_valet
 install_valet_deps
 enable_php_fpm
 write_custom_php_ini
+write_custom_nginx_upload_conf
+write_custom_php_fpm_conf
 enable_extra_php_extensions
 restart_php_fpm
 valet_install
