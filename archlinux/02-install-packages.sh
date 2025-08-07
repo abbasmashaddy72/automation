@@ -30,7 +30,7 @@ if [[ ! -f "$LIBDIR/lib-aur-helper.sh" ]]; then
 fi
 source "$LIBDIR/lib-aur-helper.sh"
 
-ensure_supported_platform arch
+ensure_supported_platform arch cachyos
 
 section "📦 Universal Package Installation for $PLATFORM_STRING"
 

@@ -21,7 +21,7 @@ if [[ ! -f "$SCRIPT_DIR/../lib/lib-platform.sh" ]]; then
 fi
 source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
-ensure_supported_platform arch manjaro
+ensure_supported_platform arch cachyos manjaro
 section "🔧 udev Rules Setup for iPhone & Android (Arch-based)"
 
 ### ─── Config and Defaults ────────────────────────────────────────────────

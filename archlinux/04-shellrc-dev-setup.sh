@@ -24,7 +24,7 @@ if [[ ! -f "$LIBDIR/lib-platform.sh" ]]; then
 fi
 source "$LIBDIR/lib-platform.sh"
 
-ensure_supported_platform arch
+ensure_supported_platform arch cachyos
 
 section "⚡️ Dev Shell RC Setup for $PLATFORM_STRING"
 
@@ -49,19 +49,6 @@ if [[ "$SHELL_TYPE" == "none" ]]; then
     warn "Only Zsh and Fish are supported by this script."
     fail "Detected shell: $CURRENT_SHELL. Please use Zsh or Fish."
 fi
-
-# ─── Main Logic ───────────────────────────────────────────────────────────
-
-if [[ "$SHELL_TYPE" == "fish" ]]; then
-    section "🐟 Fish shell detected: running Fish dev RC setup"
-    setup_fish_devrc "$SHELL_RC"
-else
-    section "💤 Zsh detected (or default): running Zsh dev RC setup"
-    setup_zsh_devrc "$SHELL_RC"
-fi
-
-ok "🚀 Developer shell RC setup complete for $SHELL_TYPE! Enjoy productivity!"
-exit 0
 
 # ─── Functions for Each Shell ─────────────────────────────────────────────
 
@@ -182,5 +169,18 @@ EOF
     ok "✅ Dev shell setup added to .zshrc"
     warn "Restart your shell or run: source $ZSHRC to apply changes."
 }
+
+# ─── Main Logic ───────────────────────────────────────────────────────────
+
+if [[ "$SHELL_TYPE" == "fish" ]]; then
+    section "🐟 Fish shell detected: running Fish dev RC setup"
+    setup_fish_devrc "$SHELL_RC"
+else
+    section "💤 Zsh detected (or default): running Zsh dev RC setup"
+    setup_zsh_devrc "$SHELL_RC"
+fi
+
+ok "🚀 Developer shell RC setup complete for $SHELL_TYPE! Enjoy productivity!"
+exit 0
 
 # End of script. Your shell RC is now corporate-cool and dev-turbocharged!

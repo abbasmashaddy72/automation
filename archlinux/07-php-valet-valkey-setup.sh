@@ -24,7 +24,7 @@ if [[ ! -f "$LIBDIR/lib-platform.sh" ]]; then
 fi
 source "$LIBDIR/lib-platform.sh"
 
-ensure_supported_platform arch
+ensure_supported_platform arch cachyos
 
 section "📦 PHP, Composer, Valet, and Valkey Setup for $PLATFORM_STRING"
 

@@ -23,7 +23,7 @@ source "$SCRIPT_DIR/../lib/lib-platform.sh"
 
 # ───── Distro Check: Only Supported Platforms ──────────────
 
-ensure_supported_platform arch manjaro
+ensure_supported_platform arch cachyos manjaro
 section "🚀 Starting setup of Ollama + Open WebUI for $PLATFORM_STRING"
 
 # ───── CLI Args and Defaults ───────────────────────────────
@@ -151,7 +151,7 @@ log "🧠 Ollama is accessible at http://localhost:11434"
 
 log "🔎 Waiting for Open WebUI container to report healthy..."
 
-MAX_HEALTH_WAIT=60  # seconds
+MAX_HEALTH_WAIT=180  # seconds
 SECONDS_WAITED=0
 HEALTH_STATUS="starting"
 

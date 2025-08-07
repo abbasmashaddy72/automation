@@ -24,7 +24,7 @@ if [[ ! -f "$LIBDIR/lib-platform.sh" ]]; then
 fi
 source "$LIBDIR/lib-platform.sh"
 
-ensure_supported_platform arch
+ensure_supported_platform arch cachyos
 
 section "🛠 Starting System Setup for $PLATFORM_STRING"
 
@@ -39,10 +39,31 @@ fi
 
 update_mirrors() {
     log "📡 Updating pacman mirrors..."
-    if sudo pacman-mirrors --fasttrack && sudo pacman -Sy; then
-        ok "Mirrors updated successfully."
+
+    if [[ -f /etc/os-release ]]; then
+        source /etc/os-release
+    fi
+
+    if [[ "$ID" == "cachyos" ]]; then
+        if command -v cachyos-rate-mirrors &>/dev/null; then
+            if sudo cachyos-rate-mirrors && sudo pacman -Sy; then
+                ok "Mirrors updated successfully using cachyos-rate-mirrors."
+            else
+                fail "CachyOS mirror update failed."
+            fi
+        else
+            fail "cachyos-rate-mirrors not found on CachyOS."
+        fi
     else
-        fail "Mirror update failed."
+        if command -v pacman-mirrors &>/dev/null; then
+            if sudo pacman-mirrors --fasttrack && sudo pacman -Sy; then
+                ok "Mirrors updated successfully."
+            else
+                fail "Mirror update failed."
+            fi
+        else
+            fail "pacman-mirrors not found and not on CachyOS."
+        fi
     fi
 }
 

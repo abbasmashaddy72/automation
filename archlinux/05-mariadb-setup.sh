@@ -24,7 +24,7 @@ if [[ ! -f "$LIBDIR/lib-platform.sh" ]]; then
 fi
 source "$LIBDIR/lib-platform.sh"
 
-ensure_supported_platform arch
+ensure_supported_platform arch cachyos
 
 section "📦 Starting MariaDB setup for $PLATFORM_STRING"
 
