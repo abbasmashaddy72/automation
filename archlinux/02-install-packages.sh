@@ -59,12 +59,14 @@ all_packages=(
     firefox                             # Mainstream open-source browser
     firefox-developer-edition           # Developer-focused browser
     google-chrome                       # Google Chrome
+    torbrowser-launcher                 # Tor Browser
 
     # --- IDEs ---
     intellij-idea-community-edition     # Java IDE
     pycharm-community-edition           # Python IDE
     android-studio                      # Android development IDE
     visual-studio-code-bin              # Code editor
+    void-bin                            # AI terminal
 
     # --- Database & Data Tools ---
     dbeaver                             # Database GUI
@@ -89,7 +91,7 @@ all_packages=(
     meld                                # Diff/merge tool
     peek                                # GIF screen recorder
     vlc                                 # Media player
-    void-bin                            # AI terminal
+    freetube                            # YouTube downloader
 
     # --- Virtualization ---
     virtualbox                          # Hypervisor
