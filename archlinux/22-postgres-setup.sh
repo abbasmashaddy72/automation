@@ -2,41 +2,37 @@
 set -Eeuo pipefail
 
 ##############################################################################
-# 03-git-setup.sh
+# 22-postgres-setup.sh
 #
 # Purpose
 # -------
-# Automated, idempotent Git setup for Arch-based distros:
-# - Installs Git (pacman preferred)
-# - Backs up existing ~/.gitconfig (and can restore via --uninstall)
-# - Configures user.name + user.email
-# - Installs + configures Git Credential Manager if available (else safe fallback)
+# Automated, idempotent PostgreSQL setup for Arch-based distros:
+# - Installs PostgreSQL (pacman)
+# - Initializes cluster (initdb) if needed
+# - Enables + starts postgresql.service
+# - Sets password for the 'postgres' role (interactive; min 8 chars)
+# - Stores state so --uninstall can rollback safely
 #
 # Safety / Reliability
 # --------------------
-# - Skips cleanly when components aren’t available
-# - Stores backups + state under /var/lib/arch-dev-setup/03-git-setup/
-# - --uninstall restores previous ~/.gitconfig when possible
+# - Skips cleanly if components are missing
+# - Avoids deleting /var/lib/postgres/data unless you explicitly confirm
+# - Tracks packages installed by this script for safe removal
+# - Stores state under /var/lib/arch-dev-setup/22-postgres-setup/
 #
 # Requires
 # --------
 # - ../lib/lib-logger.sh
 # - ../lib/lib-platform.sh
-# - ../lib/lib-aur-helper.sh
 #
 # Usage
 # -----
-#   ./03-git-setup.sh
-#   ./03-git-setup.sh --uninstall
-#
-# Notes
-# -----
-# - This script prompts for Git username + email. That’s intentional.
-#   You can later add flags to run fully non-interactive if you want.
+#   ./22-postgres-setup.sh
+#   ./22-postgres-setup.sh --uninstall
 ##############################################################################
 
 ### ─────────────────────────────────────────────────────────────────────────
-### Crash context (so errors aren’t mysterious)
+### Crash context (so errors aren’t a mystery)
 ### ─────────────────────────────────────────────────────────────────────────
 on_err() {
     echo "❌ Error on line $1 while running: $2" >&2
@@ -44,7 +40,7 @@ on_err() {
 trap 'on_err "$LINENO" "$BASH_COMMAND"' ERR
 
 ### ─────────────────────────────────────────────────────────────────────────
-### Library load and platform detection
+### Library checks and bootstrap
 ### ─────────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIBDIR="$SCRIPT_DIR/../lib"
@@ -63,19 +59,12 @@ fi
 # shellcheck disable=SC1091
 source "$LIBDIR/lib-platform.sh"
 
-if [[ ! -f "$LIBDIR/lib-aur-helper.sh" ]]; then
-    echo "AUR helper library not found at: $LIBDIR/lib-aur-helper.sh" >&2
-    exit 1
-fi
-# shellcheck disable=SC1091
-source "$LIBDIR/lib-aur-helper.sh"
-
 ensure_supported_platform arch cachyos manjaro garuda endeavouros
 
-section "🔧 Git setup for $PLATFORM_STRING"
+section "🐘 PostgreSQL setup for $PLATFORM_STRING"
 
 ### ─────────────────────────────────────────────────────────────────────────
-### Flags / state dir (for uninstall + backups)
+### Flags / state dir (for uninstall + tracking)
 ### ─────────────────────────────────────────────────────────────────────────
 DO_UNINSTALL="n"
 for arg in "$@"; do
@@ -84,11 +73,11 @@ for arg in "$@"; do
         -h|--help)
       cat <<EOF
 Usage:
-  $0              Configure Git (interactive)
-  $0 --uninstall  Restore previous ~/.gitconfig (if backed up)
+  $0              Install + configure PostgreSQL
+  $0 --uninstall  Stop/disable PostgreSQL and optionally remove data
 
 State directory:
-  /var/lib/arch-dev-setup/03-git-setup/
+  /var/lib/arch-dev-setup/22-postgres-setup/
 EOF
             exit 0
         ;;
@@ -99,12 +88,12 @@ EOF
     esac
 done
 
-STATE_DIR="/var/lib/arch-dev-setup/03-git-setup"
-BACKUP_DIR="$STATE_DIR/backups"
+STATE_DIR="/var/lib/arch-dev-setup/22-postgres-setup"
 STATE_PKGS="$STATE_DIR/installed-packages.txt"
-STATE_LAST_BACKUP="$STATE_DIR/last-backup.path"
+STATE_INIT_FLAG="$STATE_DIR/cluster.initialized.flag"
 
-GITCONFIG="$HOME/.gitconfig"
+sudo mkdir -p "$STATE_DIR" >/dev/null 2>&1 || true
+sudo touch "$STATE_PKGS" >/dev/null 2>&1 || true
 
 ### ─────────────────────────────────────────────────────────────────────────
 ### Sudo upfront
@@ -113,8 +102,6 @@ log "🔐 Please enter your sudo password to begin..."
 if ! sudo -v; then
     fail "❌ Failed to authenticate sudo."
 fi
-sudo mkdir -p "$BACKUP_DIR" >/dev/null 2>&1 || true
-sudo touch "$STATE_PKGS" >/dev/null 2>&1 || true
 
 ### ─────────────────────────────────────────────────────────────────────────
 ### Helpers
@@ -122,8 +109,7 @@ sudo touch "$STATE_PKGS" >/dev/null 2>&1 || true
 prompt_yn() {
     local prompt="${1:-Continue?}"
     local default="${2:-y}"
-    local reply
-    
+    local reply=""
     while true; do
         if [[ "$default" == "y" ]]; then
             read -r -p "$prompt [Y/n]: " reply
@@ -132,7 +118,6 @@ prompt_yn() {
             read -r -p "$prompt [y/N]: " reply
             reply="${reply:-n}"
         fi
-        
         case "${reply,,}" in
             y|yes) return 0 ;;
             n|no)  return 1 ;;
@@ -142,9 +127,9 @@ prompt_yn() {
 }
 
 is_installed_pkg() { pacman -Q "$1" &>/dev/null; }
-is_pacman_available() { pacman -Si "$1" &>/dev/null; }
 
 record_installed_pkgs() {
+    # Record only packages NOT installed before this script runs.
     local pkgs=("$@")
     local p
     for p in "${pkgs[@]}"; do
@@ -154,42 +139,12 @@ record_installed_pkgs() {
     done
 }
 
-backup_gitconfig_if_present() {
-    if [[ -f "$GITCONFIG" ]]; then
-        local ts backup_path
-        ts="$(date +%Y%m%d%H%M%S)"
-        backup_path="$BACKUP_DIR/.gitconfig.backup.$ts"
-        
-        cp -a "$GITCONFIG" "$backup_path"
-        echo "$backup_path" | sudo tee "$STATE_LAST_BACKUP" >/dev/null
-        
-        ok "Backed up existing ~/.gitconfig to: $backup_path"
-    else
-        ok "No existing ~/.gitconfig found (nothing to back up)."
-    fi
-}
-
-restore_gitconfig_from_state() {
-    if [[ ! -f "$STATE_LAST_BACKUP" ]]; then
-        warn "No recorded backup found (state file missing): $STATE_LAST_BACKUP"
-        return 1
-    fi
-    
-    local backup_path
-    backup_path="$(sudo cat "$STATE_LAST_BACKUP" 2>/dev/null || true)"
-    
-    if [[ -z "$backup_path" || ! -f "$backup_path" ]]; then
-        warn "Recorded backup path is missing or invalid: $backup_path"
-        return 1
-    fi
-    
-    cp -a "$backup_path" "$GITCONFIG"
-    ok "Restored ~/.gitconfig from: $backup_path"
-    return 0
+cluster_initialized() {
+    [[ -d /var/lib/postgres/data/base ]]
 }
 
 ### ─────────────────────────────────────────────────────────────────────────
-### Uninstall mode (restore config + optionally remove installed packages)
+### Uninstall mode
 ### ─────────────────────────────────────────────────────────────────────────
 uninstall_remove_recorded_packages() {
     if [[ ! -f "$STATE_PKGS" ]]; then
@@ -198,7 +153,6 @@ uninstall_remove_recorded_packages() {
     fi
     
     mapfile -t pkgs < <(sudo sort -u "$STATE_PKGS" | sed '/^\s*$/d' || true)
-    
     if [[ ${#pkgs[@]} -eq 0 ]]; then
         ok "No packages were recorded as installed by this script."
         return 0
@@ -228,111 +182,125 @@ uninstall_remove_recorded_packages() {
 }
 
 run_uninstall() {
-    section "🧯 Uninstall: restoring Git config"
-    if restore_gitconfig_from_state; then
-        section "🔍 Git configuration after restore:"
-        git config --list | tee -a "$LOGFILE" || true
+    section "🧹 Uninstalling PostgreSQL (best-effort rollback)"
+    
+    # Stop/disable service if it exists
+    if systemctl list-unit-files | grep -q '^postgresql\.service'; then
+        sudo systemctl stop postgresql 2>/dev/null || true
+        sudo systemctl disable postgresql 2>/dev/null || true
+        ok "postgresql.service stop/disable attempted."
     else
-        warn "Could not restore ~/.gitconfig (no backup available)."
+        warn "postgresql.service not found. Skipping service stop/disable."
     fi
     
-    # We generally DO NOT auto-remove git itself; but we can remove what we installed.
+    # Optionally remove data directory (destructive; require explicit consent)
+    if [[ -d /var/lib/postgres/data ]]; then
+        warn "PostgreSQL data directory exists: /var/lib/postgres/data"
+        if prompt_yn "Delete /var/lib/postgres/data ? (DESTRUCTIVE: deletes all DBs)" "n"; then
+            sudo rm -rf /var/lib/postgres/data || warn "Could not remove /var/lib/postgres/data"
+            ok "Removed /var/lib/postgres/data"
+        else
+            warn "Leaving /var/lib/postgres/data intact."
+        fi
+    fi
+    
     uninstall_remove_recorded_packages
     ok "✅ Uninstall complete."
 }
 
 ### ─────────────────────────────────────────────────────────────────────────
-### AUR helper selection (uses your lib; bootstrap behavior belongs there)
+### Install PostgreSQL (idempotent)
 ### ─────────────────────────────────────────────────────────────────────────
-AUR_HELPER="$(detect_aur_helper)"
-if [[ "$AUR_HELPER" == "none" ]]; then
-    # Don’t auto-bootstrap here: this script’s purpose is Git config, not AUR infrastructure.
-    # We’ll still be able to proceed with core Git using pacman.
-    warn "No AUR helper detected. We'll proceed without one (pacman-only where possible)."
-else
-    ok "AUR helper selected: $AUR_HELPER"
-fi
-
-### ─────────────────────────────────────────────────────────────────────────
-### Install Git (pacman preferred; AUR only if helper exists)
-### ─────────────────────────────────────────────────────────────────────────
-install_git() {
-    if command -v git &>/dev/null; then
-        ok "Git already installed."
+install_postgres() {
+    if is_installed_pkg postgresql; then
+        ok "PostgreSQL already installed."
         return 0
     fi
     
-    log "Installing git (pacman preferred)..."
-    record_installed_pkgs git
-    if sudo pacman -S --noconfirm --needed git; then
-        ok "Git installed via pacman."
-        return 0
-    fi
-    
-    if [[ "$AUR_HELPER" != "none" ]]; then
-        aur_install git && ok "Git installed via $AUR_HELPER." && return 0
-    fi
-    
-    fail "Git installation failed (pacman failed and no AUR helper available)."
+    log "📦 Installing PostgreSQL..."
+    record_installed_pkgs postgresql
+    sudo pacman -S --noconfirm --needed postgresql || fail "Failed to install PostgreSQL"
+    ok "PostgreSQL installed."
 }
 
 ### ─────────────────────────────────────────────────────────────────────────
-### Install Git Credential Manager (best-effort)
+### Initialize cluster (idempotent)
 ### ─────────────────────────────────────────────────────────────────────────
-install_credential_manager() {
-    # If already configured, skip.
-    if git config --global credential.helper 2>/dev/null | grep -q 'manager'; then
-        ok "Git credential manager already configured."
+init_postgres_db() {
+    if cluster_initialized; then
+        ok "PostgreSQL cluster already initialized. Skipping initdb."
         return 0
     fi
     
-    log "🧩 Installing git-credential-manager (best-effort)..."
-    
-    if is_pacman_available git-credential-manager; then
-        record_installed_pkgs git-credential-manager
-        sudo pacman -S --noconfirm --needed git-credential-manager || warn "pacman install failed for git-credential-manager"
-        elif [[ "$AUR_HELPER" != "none" ]]; then
-        record_installed_pkgs git-credential-manager
-        aur_install git-credential-manager || warn "AUR install failed for git-credential-manager"
-    else
-        warn "git-credential-manager not available (no repo package and no AUR helper)."
-    fi
-    
-    # Configure helper: manager if available, else safe fallback.
-    if command -v git-credential-manager &>/dev/null; then
-        git config --global credential.helper manager || warn "Failed to set credential.helper to manager"
-        ok "Credential helper set to: manager"
-    else
-        # store is functional but plain-text on disk. Still better than nothing for some workflows.
-        git config --global credential.helper store || warn "Failed to set credential.helper store"
-        warn "Credential helper set to: store (plaintext). Consider installing GCM later."
-    fi
+    log "🔧 Initializing PostgreSQL cluster (initdb)..."
+    # initdb location differs; on Arch, postgres user owns /var/lib/postgres
+    sudo -u postgres initdb --locale "${LANG:-en_US.UTF-8}" -E UTF8 -D '/var/lib/postgres/data/' \
+    || fail "PostgreSQL initdb failed"
+    echo "initialized" | sudo tee "$STATE_INIT_FLAG" >/dev/null
+    ok "PostgreSQL initialized."
 }
 
 ### ─────────────────────────────────────────────────────────────────────────
-### Prompt for user details
+### Enable + start service (idempotent)
 ### ─────────────────────────────────────────────────────────────────────────
-prompt_git_user_details() {
-    local git_username git_email
+start_postgres_service() {
+    log "🚀 Enabling and starting postgresql.service..."
+    sudo systemctl enable --now postgresql || fail "Failed to enable/start PostgreSQL service"
+    
+    # Give it a moment on slower machines
+    sleep 2
+    
+    if sudo systemctl is-active --quiet postgresql; then
+        ok "PostgreSQL service is running."
+        return 0
+    fi
+    
+    sudo systemctl status postgresql | tee -a "$LOGFILE" || true
+    fail "PostgreSQL service failed to start."
+}
+
+### ─────────────────────────────────────────────────────────────────────────
+### Password setting (interactive)
+### ─────────────────────────────────────────────────────────────────────────
+set_postgres_password() {
+    local pass pass2
     
     while true; do
-        read -r -p "👤 Enter your Git username: " git_username
-        git_username="$(echo "$git_username" | xargs)"
-        [[ -n "$git_username" ]] && break
-        warn "Git username cannot be empty."
-    done
-    
-    while true; do
-        read -r -p "📧 Enter your Git email: " git_email
-        git_email="$(echo "$git_email" | xargs)"
-        if [[ "$git_email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+        read -rsp "🔐 Enter new password for PostgreSQL 'postgres' user (min 8 chars): " pass; echo
+        read -rsp "🔁 Confirm password: " pass2; echo
+        
+        if [[ -n "$pass" && "$pass" == "$pass2" && ${#pass} -ge 8 ]]; then
             break
         fi
-        warn "Invalid email. Please enter a valid email address."
+        warn "❌ Passwords do not match or are too short. Please try again."
     done
     
-    export GIT_USER_NAME="$git_username"
-    export GIT_USER_EMAIL="$git_email"
+    # Escape single quotes for SQL literal
+    local pass_sql
+    pass_sql="${pass//\'/\'\'}"
+    
+    log "🔐 Setting password for 'postgres' role..."
+    sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER ROLE postgres WITH PASSWORD '${pass_sql}';" \
+    || fail "Failed to set postgres password"
+    
+    ok "Password set for 'postgres' role."
+}
+
+### ─────────────────────────────────────────────────────────────────────────
+### Summary output
+### ─────────────────────────────────────────────────────────────────────────
+show_postgres_status() {
+    section "🐘 PostgreSQL Version & Service Status"
+    
+    # Version
+    if command -v psql &>/dev/null; then
+        sudo -u postgres psql -V | tee -a "$LOGFILE" || true
+    else
+        warn "psql not found in PATH (unexpected)."
+    fi
+    
+    # Service status
+    sudo systemctl status postgresql | tee -a "$LOGFILE" || true
 }
 
 ### ─────────────────────────────────────────────────────────────────────────
@@ -343,25 +311,10 @@ if [[ "$DO_UNINSTALL" == "y" ]]; then
     exit 0
 fi
 
-# Ensure git exists first (since we use git config)
-install_git
+install_postgres
+init_postgres_db
+start_postgres_service
+set_postgres_password
+show_postgres_status
 
-# Backup current config before changes (so uninstall can restore)
-backup_gitconfig_if_present
-
-# Collect identity
-prompt_git_user_details
-
-# Configure identity
-log "✍️ Setting Git username and email..."
-git config --global user.name "$GIT_USER_NAME" || fail "Failed to set user.name"
-git config --global user.email "$GIT_USER_EMAIL" || fail "Failed to set user.email"
-ok "Git identity configured."
-
-# Credential helper best-effort
-install_credential_manager
-
-section "🔍 Git configuration summary:"
-git config --list | tee -a "$LOGFILE" || true
-
-ok "🎉 Git setup complete!"
+ok "🎉 PostgreSQL setup complete. User: postgres"
