@@ -240,6 +240,39 @@ valet_park_dir() {
 }
 
 ### ─────────────────────────────────────────────────────────────────────────
+### Optional Local info folder creation (interactive)
+### ─────────────────────────────────────────────────────────────────────────
+create_local_info_folder() {
+    local local_dir="$ROOT_DIR/Local"
+    local folder_name="info"
+
+    if ! prompt_yn "Create a Local info folder with phpinfo()?" "n"; then
+        log "Skipping Local info folder creation."
+        return 0
+    fi
+
+    read -r -p "Folder name under Local [info]: " input
+    folder_name="${input:-info}"
+
+    local info_dir="$local_dir/$folder_name"
+    local index_file="$info_dir/index.php"
+
+    mkdir -p "$info_dir"
+
+    if [[ -f "$index_file" ]]; then
+        warn "Info page already exists: $index_file"
+        return 0
+    fi
+
+    cat >"$index_file" <<'PHP'
+<?php
+phpinfo();
+PHP
+
+    ok "Created info page: $index_file"
+}
+
+### ─────────────────────────────────────────────────────────────────────────
 ### Uninstall (best-effort)
 ### ─────────────────────────────────────────────────────────────────────────
 run_uninstall() {
@@ -288,7 +321,7 @@ PARKABLE_SUBDIRS=(
     "Testing"
 )
 
-declare -a created_dirs existing_dirs parked_dirs
+declare -a created_dirs=() existing_dirs=() parked_dirs=()
 
 ### ─────────────────────────────────────────────────────────────────────────
 ### Main flow
@@ -314,6 +347,10 @@ done
 
 if (( ${#created_dirs[@]} > 0 )); then ok "Created: ${created_dirs[*]}"; fi
 if (( ${#existing_dirs[@]} > 0 )); then warn "Already existed: ${existing_dirs[*]}"; fi
+
+# Ask AFTER directories exist
+section "ℹ️ Optional Local info page"
+create_local_info_folder
 
 # Ensure Valet is usable before parking
 ensure_valet_initialized

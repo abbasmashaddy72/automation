@@ -75,13 +75,13 @@ for arg in "$@"; do
     case "$arg" in
         --uninstall) DO_UNINSTALL="y" ;;
         -h|--help)
-      cat <<EOF
+            cat <<EOF
 Usage:
-  $0              Apply dev shell RC configuration (Fish/Zsh)
-  $0 --uninstall  Restore previous config from backups (best-effort)
+  $0
+  $0 --uninstall
 
 State directory:
-  /var/lib/arch-dev-setup/04-shellrc-dev-setup/
+  ~/.local/state/arch-dev-setup/04-shellrc-dev-setup/
 EOF
             exit 0
         ;;
@@ -92,12 +92,17 @@ EOF
     esac
 done
 
-STATE_DIR="/var/lib/arch-dev-setup/04-shellrc-dev-setup"
+### ─────────────────────────────────────────────────────────────────────────
+### USER-SAFE STATE DIR (FIX)
+### ─────────────────────────────────────────────────────────────────────────
+STATE_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}"
+STATE_DIR="$STATE_ROOT/arch-dev-setup/04-shellrc-dev-setup"
 BACKUP_DIR="$STATE_DIR/backups"
+
 STATE_LAST_FISH_BACKUP="$STATE_DIR/last-fish-backup.path"
 STATE_LAST_ZSH_BACKUP="$STATE_DIR/last-zsh-backup.path"
 
-sudo mkdir -p "$BACKUP_DIR" >/dev/null 2>&1 || true
+mkdir -p "$BACKUP_DIR" >/dev/null 2>&1 || true
 
 ### ─────────────────────────────────────────────────────────────────────────
 ### Helpers

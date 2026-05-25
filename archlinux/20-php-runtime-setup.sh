@@ -330,15 +330,12 @@ write_custom_php_fpm_conf() {
   local path="/etc/php/php-fpm.d/custom_upload.conf"
   local content
   content="$(cat <<EOF
-; php-fpm pool overrides for local development
-; Managed by: 20-php-runtime-setup.sh
-;
-; Revert:
-;   sudo rm -f /etc/php/php-fpm.d/custom_upload.conf
-;   sudo systemctl restart php-fpm
-
+[www]
+; Upload limits
 php_admin_value[upload_max_filesize] = ${upload_max_filesize}
 php_admin_value[post_max_size] = ${post_max_size}
+
+; Memory
 php_admin_value[memory_limit] = ${memory_limit}
 EOF
 )"

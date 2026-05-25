@@ -90,6 +90,8 @@ done
 STATE_DIR="/var/lib/arch-dev-setup/23-valkey-setup"
 STATE_PKGS="$STATE_DIR/installed-packages.txt"
 
+VALKEY_UNIT=""
+
 sudo mkdir -p "$STATE_DIR" >/dev/null 2>&1 || true
 sudo touch "$STATE_PKGS" >/dev/null 2>&1 || true
 
@@ -138,7 +140,17 @@ record_installed_pkgs() {
 
 service_exists() {
     local svc="$1"
-    systemctl list-unit-files | grep -q "^${svc}\.service"
+    systemctl cat "$svc.service" >/dev/null 2>&1
+}
+
+detect_valkey_unit() {
+    for u in valkey redis; do
+        if systemctl cat "$u.service" >/dev/null 2>&1; then
+            VALKEY_UNIT="$u"
+            return 0
+        fi
+    done
+    return 1
 }
 
 ### ─────────────────────────────────────────────────────────────────────────
@@ -213,16 +225,15 @@ install_valkey() {
 
 enable_valkey() {
     section "🛠 Enabling and starting Valkey service"
-    
-    if service_exists valkey; then
-        sudo systemctl enable --now valkey || warn "Could not enable/start valkey.service"
-    else
-        warn "valkey.service unit not found (package may use a different unit name)."
-        warn "Check units: systemctl list-unit-files | grep -i valkey"
+
+    if ! detect_valkey_unit; then
+        warn "No Valkey/Redis systemd unit found."
         return 0
     fi
-    
-    sudo systemctl status valkey --no-pager || warn "Valkey service status check failed."
+
+    sudo systemctl enable --now "$VALKEY_UNIT" || warn "Could not enable/start $VALKEY_UNIT.service"
+
+    sudo systemctl status "$VALKEY_UNIT" --no-pager || true
 }
 
 ### ─────────────────────────────────────────────────────────────────────────
@@ -230,32 +241,25 @@ enable_valkey() {
 ### ─────────────────────────────────────────────────────────────────────────
 final_checks() {
     section "🧪 Verifying Valkey"
-    
-    if systemctl is-active --quiet valkey 2>/dev/null; then
-        ok "Valkey is running."
-    else
-        warn "Valkey is NOT running (check: journalctl -u valkey -e)"
+
+    if [[ -z "$VALKEY_UNIT" ]]; then
+        warn "Valkey unit was not detected earlier; skipping service checks."
+        return 0
     fi
-    
-    # CLI name can vary; valkey usually ships valkey-cli, but be defensive.
+
+    if systemctl is-active --quiet "$VALKEY_UNIT"; then
+        ok "Valkey is running ($VALKEY_UNIT.service)."
+    else
+        warn "Valkey is NOT running (journalctl -u $VALKEY_UNIT -e)"
+    fi
+
     if command -v valkey-cli &>/dev/null; then
         ok "valkey-cli found."
-        
-        # Best-effort ping; do not fail the whole script if ping fails (auth/bind might differ).
         if valkey-cli ping 2>/dev/null | grep -qi pong; then
             ok "valkey-cli ping: PONG"
         else
-            warn "valkey-cli ping did not return PONG (service may be secured/bound differently)."
+            warn "valkey-cli ping did not return PONG."
         fi
-        elif command -v redis-cli &>/dev/null; then
-        warn "valkey-cli not found, but redis-cli exists. Trying redis-cli ping..."
-        if redis-cli ping 2>/dev/null | grep -qi pong; then
-            ok "redis-cli ping: PONG"
-        else
-            warn "redis-cli ping did not return PONG."
-        fi
-    else
-        warn "Neither valkey-cli nor redis-cli found in PATH."
     fi
 }
 
