@@ -224,10 +224,10 @@ remove_block_range() {
 # - duplicated legacy headers without reliable END markers
 sanitize_legacy_fish_junk() {
     local file="$1"
-    
+
     # Remove any lines that look like timestamp logger output
     sed -i -E '/^[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]][0-9]{2}:[0-9]{2}:[0-9]{2}[[:space:]]/d' "$file"
-    
+
     # Remove duplicated legacy sections that start with these headers (no reliable END).
     # Deletes from header to next blank line. Repeats for common old headers.
     for hdr in \
@@ -335,13 +335,13 @@ select_fetch_tool() {
         ok "✅ fastfetch detected → will auto-run on every NEW terminal."
         return 0
     fi
-    
+
     if command -v neofetch &>/dev/null; then
         FETCH_TOOL="neofetch"
         ok "✅ neofetch detected → will auto-run on every NEW terminal."
         return 0
     fi
-    
+
     # Neither installed: ask once, visible
     if prompt_yn "fastfetch/neofetch not found. Install fastfetch and enable banner?" "y"; then
         if pacman_has_pkg fastfetch; then
@@ -352,7 +352,7 @@ select_fetch_tool() {
         fi
         warn "fastfetch not available via pacman on this system. Banner disabled."
     fi
-    
+
     FETCH_TOOL="skip"
 }
 
@@ -461,25 +461,25 @@ apply_fish_config() {
     local fishrc="$HOME/.config/fish/config.fish"
     mkdir -p "$(dirname "$fishrc")"
     touch "$fishrc"
-    
+
     backup_file "$fishrc" "fish"
-    
+
     # Remove managed blocks first
     remove_block_range "$fishrc" "$FISH_BEGIN_FETCH" "$FISH_END_FETCH"
     remove_block_range "$fishrc" "$FISH_BEGIN_DEV" "$FISH_END_DEV"
     remove_block_range "$fishrc" "$FISH_BEGIN_PHPV" "$FISH_END_PHPV"
     remove_block_range "$fishrc" "$FISH_BEGIN_GREETING" "$FISH_END_GREETING"
-    
+
     # Clean legacy junk (timestamps, duplicates, etc.)
     sanitize_legacy_fish_junk "$fishrc"
-    
+
     # Append clean blocks
     fish_block_disable_greeting >> "$fishrc"
     if [[ "$FETCH_TOOL" != "skip" ]]; then
         fish_block_fetch "$FETCH_TOOL" >> "$fishrc"
     fi
     fish_block_dev_phpv >> "$fishrc"
-    
+
     ok "✅ Updated: $fishrc"
     warn "Apply immediately (no logout): source $fishrc"
 }

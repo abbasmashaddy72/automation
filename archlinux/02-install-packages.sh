@@ -284,6 +284,7 @@ all_packages=(
     onlyoffice-bin
     thunderbird
     ferdium
+    okular
     
     # --- Security & Passwords ---
     keepassxc

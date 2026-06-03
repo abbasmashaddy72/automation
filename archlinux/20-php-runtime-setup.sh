@@ -108,7 +108,8 @@ backup_if_exists() {
   # Creates a timestamped backup if file exists
   local path="$1"
   [[ -f "$path" ]] || return 0
-  local bak="${path}.bak.$(date +%Y%m%d%H%M%S)"
+  local bak
+  bak="${path}.bak.$(date +%Y%m%d%H%M%S)"
   sudo cp "$path" "$bak" >/dev/null 2>&1 || true
   warn "Backup created: $bak"
 }
@@ -129,14 +130,39 @@ write_file_if_changed() {
 }
 
 ##############################################################################
-# Uninstall mode (best-effort cleanup)
+# Remove installed PHP packages
+##############################################################################
+log "Discovering installed PHP packages..."
+
+installed_packages=()
+
+while read -r pkg; do
+  [[ -n "$pkg" ]] && installed_packages+=("$pkg")
+done < <(
+  pacman -Qq 2>/dev/null | grep '^php'
+)
+
+if ((${#installed_packages[@]})); then
+  log "The following PHP packages will be removed:"
+  printf '  - %s\n' "${installed_packages[@]}"
+
+  sudo pacman -Rns --noconfirm "${installed_packages[@]}" \
+    || warn "Some packages could not be removed."
+else
+  warn "No installed PHP packages found."
+fi
+
+##############################################################################
+# Uninstall mode
 ##############################################################################
 if [[ "${1:-}" == "--uninstall" ]]; then
-  section "🧹 Uninstalling PHP runtime (best-effort)"
+  section "🧹 Uninstalling PHP runtime"
 
-  # Stop services first (don’t error if they’re absent)
-  sudo systemctl stop php-fpm.service >/dev/null 2>&1 || warn "php-fpm was not running"
-  sudo systemctl disable php-fpm.service >/dev/null 2>&1 || warn "php-fpm was not enabled"
+  # Stop php-fpm if present
+  if systemctl list-unit-files 2>/dev/null | grep -q '^php-fpm.service'; then
+    log "Stopping php-fpm..."
+    sudo systemctl disable --now php-fpm.service >/dev/null 2>&1 || true
+  fi
 
   # Files managed by this script
   declare -a managed_files=(
@@ -145,7 +171,7 @@ if [[ "${1:-}" == "--uninstall" ]]; then
     "/etc/php/php-fpm.d/custom_upload.conf"
   )
 
-  # Extension ini stubs managed by this script
+  # Extension INI files managed by this script
   declare -a managed_ext_inis=(
     "/etc/php/conf.d/zz-bcmath.ini"
     "/etc/php/conf.d/zz-gd.ini"
@@ -158,34 +184,81 @@ if [[ "${1:-}" == "--uninstall" ]]; then
     "/etc/php/conf.d/zz-zip.ini"
   )
 
-  log "Removing managed config files..."
-  sudo rm -f "${managed_files[@]}" >/dev/null 2>&1 || true
+  log "Removing managed configuration files..."
 
-  log "Removing managed extension ini stubs..."
-  sudo rm -f "${managed_ext_inis[@]}" >/dev/null 2>&1 || true
+  for file in "${managed_files[@]}"; do
+    if [[ -e "$file" ]]; then
+      sudo rm -f "$file"
+      ok "Removed $file"
+    fi
+  done
 
-  # Remove packages (won’t hard-fail if deps are in use)
-  declare -a remove_pkgs=(
-    php
-    php-fpm
-    php-apcu
-    php-gd
-    php-intl
-    php-mbstring
-    php-pdo
-    php-pdo-mysql
-    php-sqlite
-    php-xml
-    php-zip
-    php-xdebug
-    php-redis
+  log "Removing managed extension INI files..."
+
+  for file in "${managed_ext_inis[@]}"; do
+    if [[ -e "$file" ]]; then
+      sudo rm -f "$file"
+      ok "Removed $file"
+    fi
+  done
+
+  ##########################################################################
+  # Remove installed PHP packages
+  ##########################################################################
+  log "Discovering installed PHP packages..."
+
+  installed_packages=()
+
+  while read -r pkg; do
+    [[ -n "$pkg" ]] && installed_packages+=("$pkg")
+  done < <(
+    pacman -Qq 2>/dev/null | grep '^php'
   )
 
-  log "Removing packages (best-effort)..."
-  sudo pacman -Rs --noconfirm "${remove_pkgs[@]}" >/dev/null 2>&1 \
-    || warn "Could not remove some packages (deps in use or not installed)."
+  if ((${#installed_packages[@]})); then
+    log "Removing installed PHP packages..."
+    printf '  - %s\n' "${installed_packages[@]}"
 
-  ok "Uninstall complete."
+    sudo pacman -Rns --noconfirm "${installed_packages[@]}" \
+      || warn "Some packages could not be removed."
+  else
+    warn "No installed PHP packages found."
+  fi
+
+  sudo systemctl daemon-reload >/dev/null 2>&1 || true
+
+  ##########################################################################
+  # Verification
+  ##########################################################################
+  echo
+  section "🧪 Uninstall Verification"
+
+  php_remaining=false
+
+  if command -v php >/dev/null 2>&1; then
+    warn "PHP binary still exists: $(command -v php)"
+    php_remaining=true
+  fi
+
+  if pacman -Qq 2>/dev/null | grep -q '^php$'; then
+    warn "php package is still installed."
+    php_remaining=true
+  fi
+
+  if pacman -Qq 2>/dev/null | grep -q '^php-fpm$'; then
+    warn "php-fpm package is still installed."
+    php_remaining=true
+  fi
+
+  if [[ "$php_remaining" == false ]]; then
+    ok "PHP runtime successfully removed."
+  else
+    warn "Some PHP components remain installed."
+    warn "Check reverse dependencies with:"
+    echo "    pactree -r php"
+    echo "    pacman -Qi php"
+  fi
+
   exit 0
 fi
 
