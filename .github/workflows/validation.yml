@@ -1,0 +1,49 @@
+name: Toolkit validation
+on:
+  push:
+    paths:
+      - '**/*.py'
+      - '**/*.sh'
+      - 'config/**'
+      - '.github/workflows/validation.yml'
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      container_matrix:
+        description: 'Run isolated distro container probes (pull official images)'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install read-only lint tooling
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck shfmt
+      - name: Run unit, syntax and lint validation
+        run: python3 scripts/validate.py --mode offline --strict-tools --output "$RUNNER_TEMP/toolkit-validation"
+      - name: Archive report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-offline
+          path: ${{ runner.temp }}/toolkit-validation/
+          if-no-files-found: warn
+  distro-probes:
+    if: github.event_name == 'workflow_dispatch' && inputs.container_matrix == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test isolated distribution containers (no host installation)
+        run: python3 scripts/validate.py --mode containers --engine docker --allow-pull --require-containers --output "$RUNNER_TEMP/toolkit-containers"
+      - name: Archive distro probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-containers
+          path: ${{ runner.temp }}/toolkit-containers/
+          if-no-files-found: warn

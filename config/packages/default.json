@@ -1,0 +1,410 @@
+{
+  "version": 3,
+  "packages": [
+    {
+      "id": "brave-browser",
+      "category": "Browsers and Desktop Applications",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "firefox",
+      "category": "Browsers and Desktop Applications",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "firefox-developer-edition",
+      "category": "Browsers and Desktop Applications",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "google-chrome",
+      "category": "Browsers and Desktop Applications",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "torbrowser-launcher",
+      "category": "Browsers and Desktop Applications",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "intellij-idea-community-edition",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "pycharm-community-edition",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "android-studio",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "visual-studio-code-bin",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "void-bin",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "dbeaver",
+      "category": "Databases and Development Services",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "postman-bin",
+      "category": "Databases and Development Services",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "tiny-rdm-bin",
+      "category": "Databases and Development Services",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "onlyoffice-bin",
+      "category": "Optional Productivity Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "thunderbird",
+      "category": "Optional Productivity Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "ferdium",
+      "category": "Optional Productivity Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "okular",
+      "category": "Optional Productivity Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "keepassxc",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "winscp",
+      "category": "Networking and Diagnostics",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "remmina",
+      "category": "Networking and Diagnostics",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "freerdp",
+      "category": "Networking and Diagnostics",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "anydesk-bin",
+      "category": "Networking and Diagnostics",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "meld",
+      "category": "Optional Productivity Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "peek",
+      "category": "Optional Productivity Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "vlc",
+      "category": "Optional Productivity Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "freetube",
+      "category": "Optional Productivity Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "virtualbox",
+      "category": "Containers and Virtualization",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "virtualbox-guest-iso",
+      "category": "Containers and Virtualization",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "virtualbox-guest-utils",
+      "category": "Containers and Virtualization",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "ttf-jetbrains-mono",
+      "category": "Optional Productivity Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "ttf-hack-nerd",
+      "category": "Optional Productivity Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "shelly",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "shellcheck",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "shfmt",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "base-devel",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "curl",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "tree",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "unzip",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "zip",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "deluge-gtk",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "ventoy",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "scrcpy",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "usbmuxd",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "android-tools",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "gvfs-afc",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "ifuse",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "libimobiledevice",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "git",
+      "category": "Git and Version Control",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "wget",
+      "category": "Essential System Utilities",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "python3",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "nodejs",
+      "category": "Developer Tools",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "flatpak",
+      "category": "Browsers and Desktop Applications",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "podman",
+      "category": "Containers and Virtualization",
+      "source": "catalog",
+      "default": true
+    },
+    {
+      "id": "lerd",
+      "category": "Lerd.sh Development Environment",
+      "source": "lerd",
+      "default": true
+    },
+    {
+      "id": "ai-ollama",
+      "category": "Local AI Tools",
+      "source": "ai",
+      "default": false
+    },
+    {
+      "id": "ai-llamacpp",
+      "category": "Local AI Tools",
+      "source": "ai",
+      "default": false
+    },
+    {
+      "id": "ai-vllm",
+      "category": "Local AI Tools",
+      "source": "ai",
+      "default": false
+    },
+    {
+      "id": "php",
+      "category": "Standalone Development Services (without Lerd)",
+      "source": "catalog",
+      "default": false,
+      "standalone": true
+    },
+    {
+      "id": "php-fpm",
+      "category": "Standalone Development Services (without Lerd)",
+      "source": "catalog",
+      "default": false,
+      "standalone": true
+    },
+    {
+      "id": "mariadb",
+      "category": "Standalone Development Services (without Lerd)",
+      "source": "catalog",
+      "default": false,
+      "standalone": true
+    },
+    {
+      "id": "mysql-server",
+      "category": "Standalone Development Services (without Lerd)",
+      "source": "catalog",
+      "default": false,
+      "standalone": true
+    },
+    {
+      "id": "postgresql-server",
+      "category": "Standalone Development Services (without Lerd)",
+      "source": "catalog",
+      "default": false,
+      "standalone": true
+    },
+    {
+      "id": "redis",
+      "category": "Standalone Development Services (without Lerd)",
+      "source": "catalog",
+      "default": false,
+      "standalone": true
+    },
+    {
+      "id": "nginx",
+      "category": "Standalone Development Services (without Lerd)",
+      "source": "catalog",
+      "default": false,
+      "standalone": true
+    },
+    {
+      "id": "apache2",
+      "category": "Standalone Development Services (without Lerd)",
+      "source": "catalog",
+      "default": false,
+      "standalone": true
+    },
+    {
+      "id": "composer",
+      "category": "Standalone Development Services (without Lerd)",
+      "source": "catalog",
+      "default": false,
+      "standalone": true
+    }
+  ]
+}

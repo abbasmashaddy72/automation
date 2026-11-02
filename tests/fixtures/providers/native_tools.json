@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "fixture-native-tools",
+  "packages": {
+    "terminal-editor": {
+      "arch": "vim",
+      "debian": "vim",
+      "fedora": "vim-enhanced",
+      "rhel": "vim-enhanced",
+      "opensuse": "vim",
+      "alpine": "vim"
+    },
+    "git-client": {
+      "arch": "git",
+      "debian": "git",
+      "fedora": "git",
+      "rhel": "git",
+      "opensuse": "git",
+      "alpine": "git"
+    }
+  }
+}
