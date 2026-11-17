@@ -297,6 +297,13 @@ pre {
   align-items: center;
   gap: 0.5rem 0.75rem;
 }
+.control-row button {
+  max-inline-size: 100%;
+}
+.tool > h3 {
+  margin-block: 0.5rem 0;
+  font-size: 1rem;
+}
 .form-action-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -586,6 +593,9 @@ dialog textarea {
 .workflow button {
   margin: 0.35rem 0.35rem 0 0;
 }
+.workflow .control-row button {
+  margin: 0;
+}
 
 .hardware {
   display: grid;
@@ -605,6 +615,18 @@ dialog textarea {
 .hardware dd {
   margin: 0.35rem 0 0;
   overflow-wrap: anywhere;
+}
+.hardware-values {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+@media (min-width: 55rem) {
+  .hardware-storage {
+    grid-column: span 2;
+  }
 }
 .eligibility {
   padding: 1rem;
@@ -649,6 +671,14 @@ dialog textarea {
 }
 .ai-workflow > :is(h3, p, pre, .presets, .tool-tabs) {
   margin: 0;
+}
+.ai-workflow button {
+  margin: 0;
+}
+.workflow-navigation {
+  margin-block-start: 0.25rem;
+  padding-block-start: 0.75rem;
+  border-top: 1px solid var(--line);
 }
 .ai-target {
   justify-content: space-between;

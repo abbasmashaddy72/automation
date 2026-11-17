@@ -1286,8 +1286,10 @@ def make_plan(args):
     if backend == "cpu" and getattr(args, "gpu_layers", 0):
         raise ValueError("Choose a GPU-capable build before setting GPU layers")
     host, reasons = host_support()
+    config = load_config() if CFG.exists() else {}
     try:
         storage = disk(args.data_root)
+        check_installed_storage(config, storage)
     except (OSError, RuntimeError, ValueError) as e:
         storage = {"ready": False, "error": str(e)}
     try:
@@ -1360,8 +1362,7 @@ def make_plan(args):
             args.data_root,
             str(Path(args.data_root) / "models"),
         ],
-        "port": getattr(args, "port", None)
-        or (load_config().get("port", 8080) if CFG.exists() else 8080),
+        "port": getattr(args, "port", None) or config.get("port", 8080),
         "backend_verified": False,
         "managed_install_supported": not reasons,
         "native_manager": host["manager"],

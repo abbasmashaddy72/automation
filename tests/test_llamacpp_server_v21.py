@@ -195,6 +195,32 @@ class FakeGPUTests(unittest.TestCase):
         self.assertEqual(plan["backend_candidate"], "cpu") if False else None
         self.assertFalse(plan["storage"]["ready"])
 
+    def test_plan_does_not_report_free_space_on_a_fallback_mount(self):
+        config = {"data_root": "/srv/ai", "storage_mount": "/srv/ai"}
+        fallback = {
+            "directory": "/srv/ai",
+            "mount": "/",
+            "ready": True,
+            "free_gib": 150,
+        }
+        with (
+            mock.patch.object(ds, "CFG") as config_path,
+            mock.patch.object(ds, "load_config", return_value=config),
+            mock.patch.object(ds, "inventory", return_value=self.sample()),
+            mock.patch.object(ds, "disk", return_value=fallback),
+            mock.patch.object(ds, "lan", return_value=None),
+            mock.patch.object(ds, "run", return_value="inactive"),
+        ):
+            config_path.exists.return_value = True
+            plan = ds.make_plan(
+                type("Args", (), {"data_root": "/srv/ai", "profile": "auto"})()
+            )
+        self.assertFalse(plan["storage"]["ready"])
+        self.assertNotIn("free_gib", plan["storage"])
+        self.assertIn(
+            "Restore the configured model filesystem", plan["storage"]["error"]
+        )
+
     def test_retired_engines_rejected(self):
         cmd = ["bash", str(ROOT / "setup.sh"), "ai", "ollama", "install"]
         test = subprocess.run(cmd, capture_output=True, text=True, timeout=15)

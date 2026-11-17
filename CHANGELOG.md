@@ -7,6 +7,7 @@ Dates follow recorded Git author dates or the local date of changes still in the
 - Aligned the backup ID field with its restore preview action and stacked the controls on narrow screens.
 - Standardized dashboard tab spacing, separated the AI execution target from the build controls, and grouped model storage checks.
 - Displayed each selected package ID on a separate line.
+- Grouped related setup, cleanup, telemetry and AI actions in responsive rows. System information lists drives individually in GiB and shows zram under Memory.
 
 ## 2026-11-17
 
