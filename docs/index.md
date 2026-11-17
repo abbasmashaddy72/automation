@@ -6,7 +6,7 @@ Current supported commands and limitations:
 - [Architecture](unified-architecture.md)
 - [Migration and retired installer ledger](legacy-migration.md)
 - [Arch](archlinux.md), [openSUSE](opensuse.md)
-- [llama.cpp and keys](archlinux-llamacpp.md), [vLLM limitations](archlinux-vllm.md)
+- [llama.cpp server](archlinux-llamacpp.md), [ChatGPT Lite](../chatgpt-lite/README.md)
 - [Laravel boundaries](laravel.md)
 - [Profiles, providers, offline receipts and projects](workflows.md)
 - [Project directories, configuration exports and Open WebUI](configuration-and-webui.md)

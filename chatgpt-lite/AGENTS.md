@@ -1,0 +1,25 @@
+# Repository Agent Rules
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+
+## Vendor / Synced Files — Do Not Edit
+
+- `src/components/ui/` contains shadcn-generated component code only (no business logic files).
+- **MUST NOT** edit shadcn-generated files manually (`src/components/ui/**`, `src/hooks/use-mobile.ts`). Update `src/components/ui/` only via `npx shadcn@latest add ...` (including `--diff` / `--overwrite`).
+- `src/lib/themes/tweakcn-presets.ts` is synced from
+  [tweakcn](https://github.com/jnsahaj/tweakcn/blob/main/utils/theme-presets.ts).
+  Local edits will be overwritten on next sync.
+
+## Design Constraints
+
+- **MUST NOT** add test frameworks unless explicitly requested.
+- **Client-side persistence only.** **MUST NOT** add server-side persistence (API/database/cloud sync) unless explicitly requested.
+- **`chatRepo` MUST NOT be imported outside `src/store/`.** Components and pages go through store actions or hooks.

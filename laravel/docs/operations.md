@@ -3,7 +3,15 @@
 A PHP repository manifest is private reviewed data, not an executable hook:
 
 ```json
-{"schema":1,"name":"approved-php","uri":"https://YOUR_APPROVED_REPOSITORY/ubuntu","suite":"noble","component":"main","key_url":"https://YOUR_APPROVED_REPOSITORY/signing-key.asc","key_sha256":"INDEPENDENTLY_VERIFIED_64_HEX_DIGEST"}
+{
+  "schema": 1,
+  "name": "approved-php",
+  "uri": "https://YOUR_APPROVED_REPOSITORY/ubuntu",
+  "suite": "noble",
+  "component": "main",
+  "key_url": "https://YOUR_APPROVED_REPOSITORY/signing-key.asc",
+  "key_sha256": "INDEPENDENTLY_VERIFIED_64_HEX_DIGEST"
+}
 ```
 
 Replace all illustrative values with an independently verified upstream repository, Ubuntu suite and ASCII-armored public signing key checksum. Repository installation needs `--approve-repository`; negative pinning excludes non-PHP packages from that origin. APT still verifies archive signatures. No default third-party repository or obsolete `apt-key` command is embedded. The external provisioning script URL and repository source are separate controls.
@@ -11,7 +19,13 @@ Replace all illustrative values with an independently verified upstream reposito
 A migration review manifest contains exactly these fields:
 
 ```json
-{"schema":1,"backward_compatible":true,"files":{"2026_01_01_000000_create_example_table.php":"REVIEWED_FILE_SHA256"}}
+{
+  "schema": 1,
+  "backward_compatible": true,
+  "files": {
+    "2026_01_01_000000_create_example_table.php": "REVIEWED_FILE_SHA256"
+  }
+}
 ```
 
 Include every committed PHP migration with the exact relative filename and SHA-256. Generate hashes from the reviewed revision outside the deployment, after human compatibility review; a hash alone cannot classify PHP code as safe. The command compares the full file map and uses `migrate --force --isolated=75`. Database isolation depends on the application's configured lock store. Back up production databases and use expand-and-contract deployment procedures. No automatic schema reversal exists.

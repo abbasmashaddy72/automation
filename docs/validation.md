@@ -4,17 +4,9 @@
 
 Use `scripts/container_workflows.py --allow-install --with-system-tests --with-lint --output=PRIVATE_DIRECTORY` to exercise native packages and run the full regression suite as an unprivileged fixture user. Fish/Zsh are installed only when their exact packages are available from enabled native repositories; unavailable shells are explicitly reported. Use `--system-tests-only` for focused regression reruns after fixture fixes, and `--jobs=1|2|3` to bound concurrent distro workloads (default two). The fixture switches numeric UID directly; it never changes deliberately expired image accounts or opens login sessions. Mocked systemd contracts explicitly simulate executable availability; an absent real manager remains unsupported. The shell regressions execute generated Bash/Fish/Zsh configuration twice, verify PATH deduplication and preserve argument boundaries for project-local tools. No interactive host shell is changed. A workflow passes only after observed container removal; an unknown engine response is a failure.
 
-Actual AI CPU tests are separately authorized:
-
-```bash
-python3 scripts/ai_sandbox.py --backend=llamacpp --with-gguf-shards --yes --allow-download --allow-pull --output=PRIVATE_DIRECTORY
-python3 scripts/ai_sandbox.py --backend=ollama --yes --allow-download --allow-pull --output=PRIVATE_DIRECTORY
-python3 scripts/ai_sandbox.py --backend=vllm --yes --allow-download --allow-pull --output=PRIVATE_DIRECTORY
-```
-
-The native installer can also be exercised with `container_workflows.py --allow-install --containers=debian --with-ollama-install --output=PRIVATE_DIRECTORY`. Its operation-specific `--with-ollama` prerequisite profile supplies curl, tar, **zstd**, CA certificates and installer utilities from enabled native repositories. The official [Linux installer](https://ollama.com/install.sh) was inspected locally to confirm its zstd requirement; the [openSUSE zstd documentation](https://doc.opensuse.org/documentation/tumbleweed/zstd/) was consulted without adding package sources. Existing installations skip unused installer prerequisites; status and dry runs remain read-only.
-
-Ollama's sandbox uses the [official CPU image](https://docs.ollama.com/docker), imports only an independently checksummed tiny [GGUF fixture](https://docs.ollama.com/import), then verifies discovery, [real generation](https://docs.ollama.com/api/generate), context and removal of its own imported model. The source GGUF remains unchanged. No host installer, service, model cache or API-key enforcement is claimed. Image pulls have a bounded 30-minute budget for large CPU runtime images; package-only workflows retain their separate shorter deadline, and source-build/native-installer workflows allow their bounded compiler/download budgets. Every image/model pull needs explicit opt-in. Timeouts/interruption produce failed receipts; unknown teardown never counts as removal.
+Live inference verification is separate from distro probes. Use
+`bash setup.sh ai server plan` for a read-only preview and
+`bash setup.sh ai server benchmark` only on a configured target with consent.
 
 When another workload locks the shared Podman engine, preserve that workload and use a private `CONTAINERS_STORAGE_CONF` file with a separate graphroot/runroot. [Podman's storage configuration](https://github.com/containers/storage/blob/main/docs/containers-storage.conf.5.md) supports per-process isolation. Example values below must be replaced with private directories owned by the test operator:
 
@@ -27,7 +19,59 @@ runroot = "/absolute/private/test-runroot"
 
 Pass `CONTAINERS_STORAGE_CONF=/absolute/private/storage.conf` only to the test commands. Never replace the user's global configuration or reset/prune their existing engine. A shared read-only image store can still contend on metadata locks; a separate image store is needed when that happens. Run heavy image pulls and backend tests sequentially. Verify all fixture containers, networks and volumes are removed. This isolation does not certify or repair an independently locked host engine.
 
-## Current verification — 2026-11-03
+## Dashboard verification
+
+| Workflow                      | Verified scope                                                                                                                                                                                                                              | Remaining coverage                                                                                         |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| System and navigation         | Chromium showed host CachyOS hardware and AI eligibility, opened the checklist, and switched all six top-level pages at desktop and mobile widths.                                                                                          | Additional browsers and real desktop integrations.                                                         |
+| Packages and terminal prompts | Chromium exercised selection, Back, preview, install, reinstall and a waiting-for-sudo event using a disposable command fixture.                                                                                                            | Live sudo, fingerprint prompts and real AUR recipe review.                                                 |
+| Local AI                      | Chromium exercised the two-step installation, local GGUF scanning, port/API/context reads against a loopback fixture, and SSH failure recovery and remote scanning with an SSH fixture. Context rollback has automated regression coverage. | Managed service installation, live inference, live SSH provisioning and GPU verification on a target host. |
+| Zed                           | Chromium used the real CLI against a temporary JSONC file. It tested a loopback model API fixture, cancelled a remote-endpoint warning, validated replacement, rejected an invalid backup ID and restored the original bytes.               | Real Zed GUI and authenticated or remote provider connectivity.                                            |
+| Cleanup                       | Chromium exercised both previews. Native CachyOS package-cache inspection reported zero candidates; a separate temporary cache demonstrated selection of two obsolete archives.                                                             | Host cache deletion, dependency removal and log changes.                                                   |
+
+The isolated Debian 13 Podman workflow passed native package smoke, ShellCheck, shfmt, checklist automation and unprivileged regressions, and verified container teardown. Its receipt is in the validation state directory under `dashboard-redesign-debian/workflows.json`.
+
+A subsequent CachyOS Chromium run tested the readable AI eligibility summary and raw JSON, recommended model selection, verified-download preview, and the exact Project Sites folder and optional PHP file list. The real ChatGPT Lite standalone build served its chat page on loopback. The preview was stopped and the port was released. Model download and GPU inference were separate from this browser run.
+
+Chromium verified the CachyOS KDE and firmware fields, the green theme, browser-saved AI preferences across reload, tab-scoped operation output and the terminal authentication modal. Managed llama.cpp registration and sudo events used fixtures. A read-only host check observed the compiled binary, an absent unit and no service configuration. Real service startup and reboot persistence were outside this run.
+
+The package grid filled its card at desktop width and kept bounded scrolling at mobile width in Chromium. The Configure → Lerd flow exercised preview, cancellation, confirmed installation, installed status, repair preview and compatibility refusal with a disposable command fixture. The host executable and compatibility were checked read-only. A live Lerd install or repair was outside this run.
+
+Chromium exercised Terminal's per-shell options and the install, login-shell and configuration review controls using fixtures. Bash, Fish and Zsh were exercised in disposable terminal sessions, where the shortcut populated the editable buffer and execution required Enter. The AI client used a loopback HTTP fixture to test selected input, streamed output and rejected multiline suggestions. Live inference and account login-shell changes were outside this run.
+
+Native shell fixtures verified the compact startup block, option discovery, preserved surrounding bytes and the sourced helpers. Disposable interactive sessions verified the shortcut in Bash, Fish and Zsh from a checkout path containing spaces, quotes and a backslash. Existing Fish and Zsh startup files were syntax-checked in preview only.
+
+Native Fish and Zsh fixtures ran the cleanup aliases with stubbed removal and installation commands and verified that personal aliases take precedence. Chromium exercised the option preview and dashboard URLs across reload, direct links, Back and Forward.
+
+Chromium verified individual Terminal command choices, exact review, mobile layout, restored managed settings and an unselected fresh configuration with Lerd present. Native Bash, Fish and Zsh fixtures verified the empty selection, a standalone project wrapper and a disabled AI operation. Live shell files and services were outside this run.
+
+## Unified merge verification
+
+The Downloads automation tree supplied the ChatGPT Lite UI, its locked
+dependencies, Zed preferences and the bounded GGUF context reader. The active
+checkout supplied the distro adapters, package/checklist workflows, the
+dedicated llama.cpp server, Open WebUI lifecycle and Laravel. The separate
+Downloads `automations/` directory was not present. No second installer
+or duplicate package/provider implementation was imported.
+
+Read-only probes passed all seven cached targets (Arch, Debian, Ubuntu,
+Fedora, Rocky, Tumbleweed and Alpine), using the private Podman engine.
+The focused Debian workflow ran unprivileged regressions, checklist CLI smoke
+and lint. The pinned Open WebUI fixture verified authentication, interrupted
+recovery, account/session persistence and teardown; provider networking was
+disabled in that fixture. Reports are under the private validation directory
+in `unified-merge-containers/`, `unified-merge-debian/` and
+`unified-merge-webui/`.
+
+ChatGPT Lite passed its production build, debug startup, streamed chat and
+browser rendering at desktop and mobile widths using a disposable loopback
+model API fixture. The production-only npm audit reported zero advisories;
+the separate developer lint toolchain has eight moderate advisory entries.
+A real
+Ubuntu install, live model inference, GPU acceleration and WebUI-to-llama.cpp
+networking are distinct checks and were not run for this merge.
+
+## Historical verification — 2026-11-03
 
 The self-contained Laravel toolkit has its own [test procedures and results](../laravel/docs/verification.md). Its tests, helpers, templates, manifests and private `.env` do not depend on this repository. Optional root unittest/CLI bridges only delegate.
 
@@ -39,23 +83,24 @@ Actual model execution passed independently in `llamacpp/ai-sandbox.json` (inclu
 
 `laravel/laravel-sandbox.json` records the clean standalone Ubuntu run, exporting only `laravel/` with no parent files or source overlays. Real Nginx, PHP-FPM, PostgreSQL, Composer, npm and Laravel exercised provisioning/repeat, deployment, reviewed migrations, health checks, rollback and persistent uploads. The systemd manager is simulated; public TLS, SSH/firewall and real systemd remain separate gates.
 
-| System | Actual status | Verified scope and remaining boundary |
-| --- | --- | --- |
-| OS/prerequisites/packages | Implemented; native tests pass | Seven distribution families above; immutable/WSL stay planning targets; derivatives classified, not individually certified |
-| Git/SSH | Implemented; disposable tests pass | Native Git/SSH probes, explicit identities and private backups; real remote credentials/host agent session unverified |
-| Bash/Fish/Zsh | Implemented; native tests pass where available | Generated blocks executed twice, PATH deduplication and argument preservation; Rocky Fish unavailable in enabled repositories |
-| Lerd/Project Sites | Implemented; contract tests pass | Runtime suppression, directory/link assistance and public CLI adapters; real Lerd DNS, services and desktop lifecycle unverified |
-| udev | Reviewed exports implemented; contract tests pass | Automatic host rule activation retired by owner; device access/reload unverified |
-| Ollama | Implemented; native installer and CPU runtime tests pass | Installer/repeat, compatible model import/reuse/generation/context/removal; no API-key enforcement claim |
-| llama.cpp | Implemented; CPU source build and runtime tests pass | Actual inference, sharded GGUF, API keys, context and safe owned removal; GPU unverified |
-| vLLM | Maintained runtime integration; CPU test passes | Actual safetensors inference and valid/invalid/absent authentication; native installer retired, host/GPU unverified |
-| AI models/resources/API keys | Implemented; native and contract tests pass | Compatible format-specific stores, preservation, automatic planning/ports and protected llama.cpp/vLLM endpoints; no format interchangeability claim |
-| Open WebUI | Implemented; pinned app test passes | Authentication, recovery and persistence; browser UX/provider connectivity remain separate |
-| Desktop/taskbar | Implemented; contract tests pass | GNOME/KDE/Cinnamon/XFCE adapters; actual graphical sessions unverified |
-| Configuration/checklist | Implemented; regression tests pass | One root runtime config; independently portable Laravel config is deliberate; read-only commands preserve state |
-| Update/backup/recovery | Implemented; disposable regression tests pass | Checksum archives, conflicts, atomic replacement, interruption and rollback; no deliverable archive generated |
-| Laravel provisioning | Portable; Ubuntu native and contract tests pass | Local provisioning native; external HTTPS/checksum/redirect/approval failures use fixtures, not an arbitrary public provisioner |
-| Laravel deployment/rollback | Portable; Ubuntu native and contract tests pass | Real application, atomic releases, shared data and rollback; real systemd/SSH/firewall/public ACME unverified |
+| System                       | Actual status                                            | Verified scope and remaining boundary                                                                                                                                            |
+| ---------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OS/prerequisites/packages    | Implemented; native tests pass                           | Seven distribution families above; immutable/WSL stay planning targets; derivatives classified, not individually certified                                                       |
+| Git/SSH                      | Implemented; disposable tests pass                       | Native Git/SSH probes, explicit identities and private backups; real remote credentials/host agent session unverified                                                            |
+| Bash/Fish/Zsh                | Implemented; native tests pass where available           | Generated blocks executed twice, PATH deduplication and argument preservation; Rocky Fish unavailable in enabled repositories                                                    |
+| Lerd/Project Sites           | Implemented; contract tests pass                         | Runtime suppression, directory/link assistance and public CLI adapters; real Lerd DNS, services and desktop lifecycle unverified                                                 |
+| udev                         | Reviewed exports implemented; contract tests pass        | Automatic host rule activation retired by owner; device access/reload unverified                                                                                                 |
+| Ollama                       | Implemented; native installer and CPU runtime tests pass | Installer/repeat, compatible model import/reuse/generation/context/removal; no API-key enforcement claim                                                                         |
+| llama.cpp                    | Implemented; CPU source build and runtime tests pass     | Actual inference, sharded GGUF, API keys, context and safe owned removal; GPU unverified                                                                                         |
+| vLLM                         | Maintained runtime integration; CPU test passes          | Actual safetensors inference and valid/invalid/absent authentication; native installer retired, host/GPU unverified                                                              |
+| AI models/resources/API keys | Implemented; native and contract tests pass              | Compatible format-specific stores, preservation, automatic planning/ports and protected llama.cpp/vLLM endpoints; no format interchangeability claim                             |
+| Open WebUI                   | Dashboard lifecycle and pinned Podman app tested         | Chromium used simulated install/start/stop responses. Real private Podman verified readiness, sign-in, recovery and persistence. Live llama.cpp connectivity remains unverified. |
+| ChatGPT Lite background      | Dashboard lifecycle tested with a simulated user manager | Chromium reached the real Node build in preview and background fixtures. Live systemd user-service lifecycle remains unverified.                                                 |
+| Desktop/taskbar              | Implemented; contract tests pass                         | GNOME/KDE/Cinnamon/XFCE adapters; actual graphical sessions unverified                                                                                                           |
+| Configuration/checklist      | Implemented; regression tests pass                       | One root runtime config; independently portable Laravel config is deliberate; read-only commands preserve state                                                                  |
+| Update/backup/recovery       | Implemented; disposable regression tests pass            | Checksum archives, conflicts, atomic replacement, interruption and rollback; no deliverable archive generated                                                                    |
+| Laravel provisioning         | Portable; Ubuntu native and contract tests pass          | Local provisioning native; external HTTPS/checksum/redirect/approval failures use fixtures, not an arbitrary public provisioner                                                  |
+| Laravel deployment/rollback  | Portable; Ubuntu native and contract tests pass          | Real application, atomic releases, shared data and rollback; real systemd/SSH/firewall/public ACME unverified                                                                    |
 
 All subsequent integration runs used a separately configured rootless Podman engine with private storage. The owner's Insure360 client and engine were preserved. An earlier shared-engine attempt could not verify cleanup while that engine was locked; its interrupted receipts remain in `system-finalization-20261103/`. Do not interpret the private-engine cleanup as verification of the unrelated shared engine, and do not reset/prune it to finish a test.
 
@@ -69,15 +114,15 @@ The final host suite discovers 479 tests: 478 pass and the existing native-PHP p
 
 Native checklist CLI smoke passed on all seven x86_64 targets: dry-run created nothing, both selected actions reached observed-ready status, a repeat run succeeded, and an existing project file survived. Every fixture was removed. Receipts/logs are in the existing validation state directories `checklist-automation-20261103/` (Arch/Debian full package and regression workflows), `checklist-cross-distro-20261103/` (five focused native regression workflows) and `checklist-lint-20261103/` (latest native lint). Tests used the private Podman storage configuration; the unrelated Insure360 engine was preserved.
 
-| Target | Checklist CLI | Regression snapshot: discovered / skipped | Environment skips |
-| --- | --- | --- | --- |
-| Arch | Pass | 477 / 1 | Native PHP |
-| Debian 13 | Pass | 477 / 2 | Native PHP, systemd-analyze |
-| Ubuntu 24.04 | Pass | 478 / 2 | Native PHP, systemd-analyze |
-| Fedora 42 | Pass | 478 / 3 | OpenSSL, native PHP, systemd-analyze |
-| Rocky 9 | Pass | 478 / 3 | Native PHP, Fish unavailable in enabled repos, systemd-analyze |
-| openSUSE Tumbleweed | Pass | 478 / 2 | Native PHP, systemd-analyze |
-| Alpine 3.22 | Pass | 478 / 3 | OpenSSL, native PHP, systemd-analyze |
+| Target              | Checklist CLI | Regression snapshot: discovered / skipped | Environment skips                                              |
+| ------------------- | ------------- | ----------------------------------------- | -------------------------------------------------------------- |
+| Arch                | Pass          | 477 / 1                                   | Native PHP                                                     |
+| Debian 13           | Pass          | 477 / 2                                   | Native PHP, systemd-analyze                                    |
+| Ubuntu 24.04        | Pass          | 478 / 2                                   | Native PHP, systemd-analyze                                    |
+| Fedora 42           | Pass          | 478 / 3                                   | OpenSSL, native PHP, systemd-analyze                           |
+| Rocky 9             | Pass          | 478 / 3                                   | Native PHP, Fish unavailable in enabled repos, systemd-analyze |
+| openSUSE Tumbleweed | Pass          | 478 / 2                                   | Native PHP, systemd-analyze                                    |
+| Alpine 3.22         | Pass          | 478 / 3                                   | OpenSSL, native PHP, systemd-analyze                           |
 
 These snapshots precede the final interruption/harness assertions as their counts indicate; the final host suite includes all 479. All seven exercised the implemented checklist actions; skipped unrelated capabilities are not passes. Distribution derivatives, other architectures and real graphical sessions are not individually certified by these runs.
 
@@ -86,15 +131,15 @@ These snapshots precede the final interruption/harness assertions as their count
 The local removal run verified the following scopes. Results live under the
 normal toolkit validation state directory; skips are not passes.
 
-| Gate | Result | Coverage / limit |
-|---|---|---|
-| Unit regressions | Passed: 399 tests | Includes removed-source guards, maintained CPU configuration, Lerd suppression, PHP export retirement and WebUI recovery |
-| Required CLI and syntax checks | Passed | Doctor, minimal dry-run, llama.cpp check/dry-run and 23 Bash scripts |
-| Actual Open WebUI slim image | Passed; teardown verified | Protected endpoint credentials, interrupted recovery and account/session/private-key persistence; `webui-migration/webui-sandbox.json` |
-| Ubuntu 24.04 package workflow | Passed; container removed | Actual disposable package install/repeat/unavailable exit, catalogue plan, Git/SSH/private agent and checklist; `legacy-removal-ubuntu/workflows.json` |
-| Arch, Debian 13, Fedora 42, Rocky 9, openSUSE Tumbleweed, Alpine 3.22 package workflows | Skipped | Images absent in the current cache; additional image pulls not authorized in the recorded attempt; `legacy-removal-packages/workflows.json` |
-| Host ShellCheck / shfmt | Skipped | Tools not installed; no contributor-host installation performed |
-| Real desktop, user-manager/autostart, device access and GPU gates | Unverified | No host mutation or certification inferred from containers |
+| Gate                                                                                    | Result                    | Coverage / limit                                                                                                                                       |
+| --------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Unit regressions                                                                        | Passed: 399 tests         | Includes removed-source guards, maintained CPU configuration, Lerd suppression, PHP export retirement and WebUI recovery                               |
+| Required CLI and syntax checks                                                          | Passed                    | Doctor, minimal dry-run, llama.cpp check/dry-run and 23 Bash scripts                                                                                   |
+| Actual Open WebUI slim image                                                            | Passed; teardown verified | Protected endpoint credentials, interrupted recovery and account/session/private-key persistence; `webui-migration/webui-sandbox.json`                 |
+| Ubuntu 24.04 package workflow                                                           | Passed; container removed | Actual disposable package install/repeat/unavailable exit, catalogue plan, Git/SSH/private agent and checklist; `legacy-removal-ubuntu/workflows.json` |
+| Arch, Debian 13, Fedora 42, Rocky 9, openSUSE Tumbleweed, Alpine 3.22 package workflows | Skipped                   | Images absent in the current cache; additional image pulls not authorized in the recorded attempt; `legacy-removal-packages/workflows.json`            |
+| Host ShellCheck / shfmt                                                                 | Skipped                   | Tools not installed; no contributor-host installation performed                                                                                        |
+| Real desktop, user-manager/autostart, device access and GPU gates                       | Unverified                | No host mutation or certification inferred from containers                                                                                             |
 
 WebUI browser UX, provider connectivity/inference and upgrades to other image
 versions remain independent gates. The approved pinned WebUI image stays cached;
@@ -180,21 +225,18 @@ classification succeeds. For actual requirements see
 
 ## AI runtime inference (explicit opt-in, localhost only)
 
-```bash
-# Only if an Ollama server and the model are already running:
-bash setup.sh ai ollama smoke --model=qwen2.5-coder:3b --port=11434
+Run `bash setup.sh ai server benchmark` on an existing managed llama.cpp
+installation. It sends real requests. Host validation only probes llama.cpp
+when explicitly opted in. Synthetic responses do not prove GPU acceleration.
 
-# Run full host report with explicit permission for a small inference request:
-python3 scripts/validate.py --mode host --allow-inference \
-    --inference-backend ollama --inference-model qwen2.5-coder:3b
-```
-
-The probe makes a bounded localhost API call (`POST /api/generate` for Ollama,
-`POST /completion` for llama.cpp or `POST /v1/chat/completions` for vLLM).
-It disables proxies and redirects; checks that the response includes nonempty
-generated text; **does not** download models, install drivers, or change
-server settings. Synthetic loopback API tests in the offline suite are not
-proof of real model inference or CUDA/ROCm/Vulkan acceleration.
+Managed llama.cpp storage regression coverage exercises local paths, spare
+filesystem selection, duplicate UUIDs, administrator-controlled mount paths,
+mount unit creation and reuse, and startup refusal when the filesystem changes.
+A generated mount-unit fixture passed `systemd-analyze verify`. Read-only Podman
+probes passed on Arch, Debian 13, Ubuntu 24.04, Fedora 42, Rocky 9, openSUSE
+Tumbleweed and Alpine 3.22. Debian 13 also passed a disposable native AI
+prerequisite install and no-op rerun. Those checks leave physical disk attachment,
+reboot persistence and GPU inference as host or VM verification tasks.
 
 ## Fault-injection and regression coverage
 
@@ -222,6 +264,5 @@ the previous release for each release candidate.
 
 The present release implements the **validation infrastructure and offline
 regressions**, but it does not claim these VM, desktop or GPU gates have passed.
-
 
 The minimal Tumbleweed fixture requires an explicitly reviewed BusyBox-awk to gawk variant replacement before installing Fish. This fixture preparation uses only configured official repositories; the production adapter continues to refuse package conflicts rather than force a solver removal. See the [upstream Zypper manual](https://raw.githubusercontent.com/openSUSE/zypper/master/doc/zypper.8.txt). Rocky's native Fish package may be unavailable in enabled repositories; tests record that capability skip without adding EPEL.

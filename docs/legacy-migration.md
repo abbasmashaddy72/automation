@@ -29,22 +29,22 @@ switches login shells or initializes existing databases.
 
 Paths in the first column are historical names, not runnable entrypoints.
 
-| Removed source under `modules/legacy/archlinux/` | Maintained replacement or approved retirement | Evidence / limits |
-|---|---|---|
-| `01-system-setup.sh` | Host upgrades, mirror, GRUB, sysctl, firewall, timers and hardware provisioning retired | No equivalent host mutation is advertised; existing host state preserved |
-| `04-shellrc-dev-setup.sh` | `developer shell`, exact-block recovery, shell-backup import/restore and optional owned-agent socket | Bash/Zsh/Fish fixtures, syntax-only checks, conflict-safe private receipts; remote plugin execution and forced shell switching retired |
-| `20-php-runtime-setup.sh` | Lerd PHP; `configuration php` gives public CLI guidance | Standalone PHP/FPM/Nginx exports and activation retired; tests enforce no export even with old `--standalone --yes` flags |
-| `21-node-runtime-setup.sh` | Lerd runtime selection and Node tooling | Existing host Node/npm/nvm preserved; no version-manager adoption or package removal |
-| `22-mariadb-setup.sh` | Public Lerd service catalogue/preset operations | Standalone initialization, credential rewriting and database purge retired |
-| `23-postgres-setup.sh` | Public Lerd PostgreSQL service operations | Existing clusters and roles never changed; standalone initialization/password setup retired |
-| `24-valkey-setup.sh` | Select a supported service from the public Lerd catalogue | No assumed preset equivalence, generated Quadlets or host service changes |
-| `61-project-sites-setup.sh` | `projects layout`, safe project templates and public Lerd park/link | Eight-folder layout, conflict/link checks, repeat invocation and existing-project preservation tested; Valet provisioning and phpinfo generation retired |
-| `82-udev-rules-setup.sh` | Automatic provisioning retired; optional `configuration udev` review export | Exact IDs, private modes, checksums, no writes on check/dry-run and no overwrite tested; actual device activation remains manual and is not a Lerd feature |
-| `91-ollama-openwebui-setup.sh` | Portable Ollama plus explicit rootless pinned-image WebUI lifecycle/recovery/recreation | Ownership, interrupted receipts, altered-resource refusal and preservation regressions; actual slim-image auth/recovery/account/session/key persistence and teardown passed, recorded by `scripts/webui_sandbox.py` in normal validation output |
-| `92-vllm-playground-setup.sh` | Reviewed existing vLLM executable, bounded unit-settings import, owned lifecycle, auth/context and verified model copies | CPU runtime integration previously verified; native vLLM/PyTorch/Playground installation retired; GPU and actual host user-manager operation not certified |
-| `93-llamacpp-setup.sh` | CPU build, owned units, keys, checksummed complete GGUF bundles and old selection/settings import | Actual tiny-model CPU inference/auth/context and genuine shard recovery previously verified; old-unit repair/uninstall is not performed on foreign units |
-| `llm-api-key.py` | Shared native private-key operations and explicit raw/env import | Private modes, unsafe paths, key preservation/rotation/revocation and protected endpoint checks covered; secrets never copied into releases |
-| `llm-api-smoke.py` | Shared bounded loopback HTTP diagnostics and inference sandbox | Redirect/proxy/response/auth contracts plus actual CPU inference; dry-run sends no prompts |
+| Removed source under `modules/legacy/archlinux/` | Maintained replacement or approved retirement                                                        | Evidence / limits                                                                                                                                                                                                                               |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `01-system-setup.sh`                             | Host upgrades, mirror, GRUB, sysctl, firewall, timers and hardware provisioning retired              | No equivalent host mutation is advertised; existing host state preserved                                                                                                                                                                        |
+| `04-shellrc-dev-setup.sh`                        | `developer shell`, exact-block recovery, shell-backup import/restore and optional owned-agent socket | Bash/Zsh/Fish fixtures, syntax-only checks, conflict-safe private receipts; remote plugin execution and forced shell switching retired                                                                                                          |
+| `20-php-runtime-setup.sh`                        | Lerd PHP; `configuration php` gives public CLI guidance                                              | Standalone PHP/FPM/Nginx exports and activation retired; tests enforce no export even with old `--standalone --yes` flags                                                                                                                       |
+| `21-node-runtime-setup.sh`                       | Lerd runtime selection and Node tooling                                                              | Existing host Node/npm/nvm preserved; no version-manager adoption or package removal                                                                                                                                                            |
+| `22-mariadb-setup.sh`                            | Public Lerd service catalogue/preset operations                                                      | Standalone initialization, credential rewriting and database purge retired                                                                                                                                                                      |
+| `23-postgres-setup.sh`                           | Public Lerd PostgreSQL service operations                                                            | Existing clusters and roles never changed; standalone initialization/password setup retired                                                                                                                                                     |
+| `24-valkey-setup.sh`                             | Select a supported service from the public Lerd catalogue                                            | No assumed preset equivalence, generated Quadlets or host service changes                                                                                                                                                                       |
+| `61-project-sites-setup.sh`                      | `projects layout`, safe project templates and public Lerd park/link                                  | Eight-folder layout, conflict/link checks, repeat invocation and existing-project preservation tested; Valet provisioning and phpinfo generation retired                                                                                        |
+| `82-udev-rules-setup.sh`                         | Automatic provisioning retired; optional `configuration udev` review export                          | Exact IDs, private modes, checksums, no writes on check/dry-run and no overwrite tested; actual device activation remains manual and is not a Lerd feature                                                                                      |
+| `91-ollama-openwebui-setup.sh`                   | Retired engine; explicit rootless pinned-image WebUI lifecycle/recovery/recreation                   | Ownership, interrupted receipts, altered-resource refusal and preservation regressions; actual slim-image auth/recovery/account/session/key persistence and teardown passed, recorded by `scripts/webui_sandbox.py` in normal validation output |
+| `92-vllm-playground-setup.sh`                    | Retired; existing installation/data untouched                                                        | CPU runtime integration previously verified; native vLLM/PyTorch/Playground installation retired; GPU and actual host user-manager operation not certified                                                                                      |
+| `93-llamacpp-setup.sh`                           | CPU build, owned units, keys, checksummed complete GGUF bundles and old selection/settings import    | Actual tiny-model CPU inference/auth/context and genuine shard recovery previously verified; old-unit repair/uninstall is not performed on foreign units                                                                                        |
+| `llm-api-key.py`                                 | Shared native private-key operations and explicit raw/env import                                     | Private modes, unsafe paths, key preservation/rotation/revocation and protected endpoint checks covered; secrets never copied into releases                                                                                                     |
+| `llm-api-smoke.py`                               | Shared bounded loopback HTTP diagnostics and inference sandbox                                       | Redirect/proxy/response/auth contracts plus actual CPU inference; dry-run sends no prompts                                                                                                                                                      |
 
 Earlier removed package, Git/SSH, taskbar, checklist, Hub catalogue, GGUF and
 snapshot helpers are covered by shared package/source adapters, developer/SSH
@@ -83,14 +83,10 @@ Keep original data and back it up before migrating. Maintained bounded data
 readers remain intentionally available:
 
 - `developer import-git-backup`, `import-shell-backup`, exact paired shell-block migration and conflict-safe restore.
-- `ai ... key-import` for an explicitly selected private key; originals are preserved.
-- `ai llamacpp|vllm legacy-plan/legacy-import` for supported stopped/disabled old units. Stop/disable the original yourself after review; imports never execute or delete it.
-- Read-only Hub inventory and independently verified snapshot copies; no external cache deletion.
-- `gguf-legacy-list/import` for old GGUF markers/selection/context; markers never grant deletion ownership.
+- `ai llamacpp gguf-legacy-list/import` for old GGUF markers, model selection
+  and context. Markers never grant deletion ownership. Copy verified assets
+  to a separate store and select them through the dedicated server.
 
-The maintained file `ai/legacy.py` is a data parser, not the removed installer
-module. Historical unit marker strings and CLI import flags remain so existing
-users can recover their settings. Removing these would strand user data.
 See [usage and recovery](unified-setup.md) and
 [WebUI recovery](configuration-and-webui.md).
 

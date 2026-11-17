@@ -19,7 +19,7 @@ Profiles are JSON `{"schema":1,"type":"automation-profile","settings":{...}}`. O
 ## Machine-readable plans
 
 ```bash
-bash setup.sh packages plan --select git,curl,php,lerd --output "$HOME/install-plan.json"
+bash setup.sh packages export --select git,curl,php,lerd --output "$HOME/install-plan.json"
 ```
 
 A plan is a point-in-time JSON description: hostname is not included, system changes are not authorized, and repository/package availability **must** be rechecked at the time of actual installation. When Lerd is compatible and selected, the original Lerd-aware overlap filtering applies to the export.
@@ -78,15 +78,36 @@ Creates a local, noninteractive, static HTML report from the existing private in
 
 ## Reviewed audit additions
 
-`bash setup.sh ai install --backends=llamacpp,ollama --dry-run` plans only the explicitly selected installers. Execute with `--yes` after review; vLLM native installation and Jan GUI remain separate manual gates. `bash setup.sh ai llamacpp resources` reports bounded CPU/cgroup/RAM-aware resources and an available loopback port. `AUTOMATION_AI_THREADS`, `AUTOMATION_AI_QUOTA` and `AUTOMATION_AI_PORT` accept `auto`; explicit CLI/configuration values and existing service selections are preserved. Hardware discovery does not prove GPU acceleration. Foreground commands do not imply a service CPU quota is enforced.
-
 Developer actions include `ssh-status`, `ssh-copy`, `ssh-test --ssh-provider=github|gitlab --identity-file=PATH`, and `clone REPOSITORY --destination=NEW_PATH`. Copy requires approval and uses clipboard stdin or a controlling terminal; it never prints a private key. Host trust remains strict and tests never accept a new fingerprint. Repository cloning validates a new owned destination and authenticates through Git's existing credential/SSH workflow. `checklist check` observes dependencies, desktop, private configuration completeness and Project Sites without mutation. `checklist automate --select configuration,projects --dry-run` plans the maintained config/layout helpers; `--yes` applies missing steps and skips ready ones. Manual acknowledgements remain separate; duplicate identity/software tasks are removed from prompts while old progress is preserved. See [setup checks](unified-setup.md#setup-checks-and-manual-checklist).
 
 Project Sites defaults to `~/Documents/Project-Sites/` and respects `AUTOMATION_PROJECT_SITES_DIR` or an explicit target. Existing content is preserved. Desktop favorites append without deleting earlier favorites; Cinnamon and XFCE support intentionally narrow single-panel/single-launcher targets and refuse ambiguous configurations. Their fixtures do not establish real desktop-session behavior.
 
 Laravel production documentation and tests now live in the [independent Laravel folder](../laravel/README.md). Root setup is only an optional launcher.
 
+## Zed settings
 
-Ollama installation, repair and update now preflight `--with-ollama` dependencies (including zstd) only when the upstream installer will actually run. An existing installation skips unused installer tools. Installer downloads validate every hop through the official Ollama/GitHub release identity, bound the response and syntax-check the saved script; signed asset query values are never logged. External installer execution still requires explicit approval and may change system services; the native integration tests run only in disposable containers.
+The bundled VS Code style profile combines the supplied Zed preferences with
+the available source project's safe editor defaults. It leaves endpoint/model
+choices and tool permissions to the local settings. Existing JSONC values
+always win; lists are preserved as a whole. Changes normalize formatting to
+JSON. A private receipt preserves the exact original bytes, including comments.
+Use `zed plan` to review keys, `zed apply --yes` to add them, or pass an explicit
+profile path. `zed backup --yes` creates a separate backup. Restore takes the
+printed receipt ID and refuses later changes unless the current SHA-256 is
+explicitly reviewed and passed with `--current-sha256`.
 
-Ollama cache reuse treats an omitted tag as `:latest` while preserving explicit tags and `--refresh-model --yes`. Runtime context reads the exact loopback `/api/ps` route, including IPv6 support. These operations do not change existing models or services merely to inspect them. WSL/immutable prerequisite installation is rejected before repository queries when required tools are missing, avoiding DNF query state creation on a blocked operation.
+## Package restore and cleanup
+
+Export a reviewed native plan with `packages export --output FILE` (include any
+explicit `--replace REQUESTED=ACTUAL` selections). The plan records package IDs,
+sources and platform; an interactive choice is recorded with its actual name
+in the installed inventory. `packages restore FILE --dry-run` previews native
+replay. Add `--yes` to run it after review. Replay rejects unavailable/managed,
+Flatpak and AUR entries and mismatched distribution/architecture/manager.
+It rechecks native availability and skips already installed exact packages.
+
+`cleanup plan` lists the number of expired toolkit repository cache entries.
+`cleanup cache --yes` deletes those entries only. Package removal, service
+removal, external caches, model data and application histories are outside
+generic cleanup. Use `ai llamacpp gguf-remove --dry-run --manifest FILE` to
+review removal of a verified toolkit-owned model copy.

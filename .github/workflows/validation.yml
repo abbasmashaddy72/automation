@@ -2,15 +2,15 @@ name: Toolkit validation
 on:
   push:
     paths:
-      - '**/*.py'
-      - '**/*.sh'
-      - 'config/**'
-      - '.github/workflows/validation.yml'
+      - "**/*.py"
+      - "**/*.sh"
+      - "config/**"
+      - ".github/workflows/validation.yml"
   pull_request:
   workflow_dispatch:
     inputs:
       container_matrix:
-        description: 'Run isolated distro container probes (pull official images)'
+        description: "Run isolated distro container probes (pull official images)"
         type: boolean
         default: false
 permissions:

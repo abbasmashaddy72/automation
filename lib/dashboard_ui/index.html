@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Linux Setup</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand">
+        <span class="mark" aria-hidden="true">›_</span> Linux Setup
+      </div>
+      <span id="host" class="host"></span>
+    </header>
+    <nav aria-label="Setup sections">
+      <button type="button" data-page="home" aria-pressed="true">System</button>
+      <button type="button" data-page="install" aria-pressed="false">
+        Packages
+      </button>
+      <button type="button" data-page="configure" aria-pressed="false">
+        Configure
+      </button>
+      <button type="button" data-page="maintenance" aria-pressed="false">
+        Maintenance
+      </button>
+      <button type="button" data-page="ai" aria-pressed="false">
+        Local AI
+      </button>
+      <button type="button" data-page="advanced" aria-pressed="false">
+        Advanced
+      </button>
+    </nav>
+    <main>
+      <button type="button" id="open-checklist" class="checklist-toggle">
+        Setup checklist
+      </button>
+      <dialog id="checklist-panel" aria-labelledby="checklist-title">
+        <header class="drawer-heading">
+          <h2 id="checklist-title">Setup checklist</h2>
+          <form method="dialog">
+            <button aria-label="Close setup checklist">Close</button>
+          </form>
+        </header>
+        <p id="checklist-status" role="status"></p>
+        <button type="button" id="checklist">Refresh checklist</button>
+        <h3>System checks</h3>
+        <ul id="observed-checks" class="checklist-items"></ul>
+        <h3>Setup operations</h3>
+        <ul id="steps" class="checklist-items" aria-live="polite"></ul>
+        <h3>Manual checklist</h3>
+        <ul id="manual-checks" class="checklist-items"></ul>
+      </dialog>
+      <section id="advanced-page" hidden>
+        <h1>Advanced</h1>
+        <p>
+          Edit toolkit settings and preview the changes before applying them.
+        </p>
+        <div class="presets">
+          <button type="button" id="review-all">Review all changes</button>
+          <button type="button" id="apply-all" disabled>
+            Apply all changes
+          </button>
+          <label
+            ><input type="checkbox" id="stage-projects" /> Set up Project
+            Sites</label
+          >
+          <label
+            ><input type="checkbox" id="stage-zed" /> Apply missing Zed
+            defaults</label
+          >
+        </div>
+        <div id="advanced-fields" class="advanced-fields"></div>
+        <p id="advanced-status" role="status"></p>
+      </section>
+      <dialog id="decision">
+        <form method="dialog">
+          <h2 id="decision-title"></h2>
+          <pre id="decision-text"></pre>
+          <div id="decision-fields"></div>
+          <div class="presets">
+            <button value="cancel">Cancel</button
+            ><button class="primary" value="accept">Continue</button>
+          </div>
+        </form>
+      </dialog>
+      <dialog
+        id="terminal-notice"
+        aria-labelledby="terminal-title"
+        aria-describedby="terminal-message"
+      >
+        <h2 id="terminal-title">Terminal input required</h2>
+        <p id="terminal-message"></p>
+        <form method="dialog">
+          <button>Back to dashboard</button>
+        </form>
+      </dialog>
+      <section id="home">
+        <h1>System information</h1>
+        <p id="home-host"></p>
+        <dl id="hardware" class="hardware" aria-live="polite">
+          <div>
+            <dt>Hardware</dt>
+            <dd>Detecting…</dd>
+          </div>
+        </dl>
+        <section class="eligibility" aria-labelledby="eligibility-title">
+          <h2 id="eligibility-title">Local AI eligibility</h2>
+          <p id="eligibility-summary" role="status">
+            Checking hardware and platform support…
+          </p>
+          <button id="open-ai" type="button">Open Local AI setup</button>
+        </section>
+        <div id="home-links" class="presets"></div>
+        <h2>Supported package managers</h2>
+        <p>
+          Arch-based distributions use Pacman. Debian and Ubuntu use APT. Fedora
+          and RHEL use DNF. openSUSE uses Zypper. Alpine uses APK.
+        </p>
+      </section>
+      <section id="install" hidden>
+        <p id="package-step" class="workflow-label">
+          Step 1 of 3 · Select packages
+        </p>
+        <p id="package-note" hidden>
+          Review selected packages and their sources in the output below. The
+          package manager resolves dependencies during installation.
+        </p>
+        <div id="package-select-panel">
+          <div class="heading">
+            <div>
+              <h1>Install packages</h1>
+              <p>
+                Choose a category, then review the packages you want to install.
+              </p>
+            </div>
+            <label class="search"
+              ><span>Search packages</span
+              ><input id="search" type="search" placeholder="e.g. Firefox"
+            /></label>
+          </div>
+          <div class="presets" aria-label="Package presets">
+            <button type="button" data-profile="default">Standard</button>
+            <button type="button" data-profile="minimal">Minimal</button>
+            <button type="button" data-profile="developer">Developer</button>
+            <button type="button" id="clear">Clear selection</button>
+            <small id="aur-option" hidden></small
+            ><button type="button" id="find-helper" hidden>
+              Find AUR helpers
+            </button>
+          </div>
+          <details class="custom-search">
+            <summary>Find a custom package</summary>
+            <form id="custom-package" class="presets">
+              <label for="custom-name">Custom package</label>
+              <input
+                id="custom-name"
+                placeholder="Package name"
+                required
+                pattern="[a-zA-Z0-9][a-zA-Z0-9+._\-]{0,95}"
+              />
+              <button type="submit">Find sources</button>
+              <button type="button" id="add-custom">Add to selection</button>
+            </form>
+          </details>
+          <div class="package-layout">
+            <aside aria-label="Package categories">
+              <h2>Categories</h2>
+              <div id="categories"></div>
+            </aside>
+            <section class="package-panel" aria-labelledby="category-title">
+              <header class="package-head">
+                <h2 id="category-title">Packages</h2>
+                <button type="button" id="select-visible">
+                  Select visible
+                </button>
+              </header>
+              <div id="packages" class="package-grid"></div>
+            </section>
+          </div>
+        </div>
+        <section class="review" aria-labelledby="review-title">
+          <div class="review-actions">
+            <button type="button" id="package-back" hidden>
+              Previous: select packages
+            </button>
+            <button type="button" id="copy-install">
+              Copy install command
+            </button>
+            <button type="button" id="preview" class="primary">
+              Next: preview selected packages
+            </button>
+            <button type="button" id="save-plan" disabled>
+              Download plan JSON
+            </button>
+            <button type="button" id="execute" disabled>
+              Proceed with installation
+            </button>
+          </div>
+          <div>
+            <h2 id="review-title">Selected packages</h2>
+            <p id="selection" aria-live="polite"></p>
+            <details>
+              <summary>View selected IDs</summary>
+              <p id="selected-ids"></p>
+            </details>
+          </div>
+        </section>
+        <label id="install-command" class="command" hidden
+          >Run in your toolkit terminal to confirm installation
+          <input id="command-text" type="text" readonly />
+        </label>
+      </section>
+      <section id="tools" hidden>
+        <h1 id="tools-title"></h1>
+        <div
+          id="tool-tabs"
+          class="subtabs"
+          role="group"
+          aria-label="Section options"
+        ></div>
+        <div id="tool-list"></div>
+      </section>
+      <div id="output-slot">
+        <section
+          class="output"
+          aria-labelledby="output-title"
+          id="results"
+          hidden
+        >
+          <h2 id="output-title">Operation output</h2>
+          <p id="status" role="status"></p>
+          <div
+            id="alternatives"
+            tabindex="-1"
+            aria-label="Package alternatives"
+          ></div>
+          <p id="result-summary" class="result-summary" hidden></p>
+          <pre
+            id="output"
+            tabindex="0"
+            aria-label="Detailed operation output"
+          ></pre>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

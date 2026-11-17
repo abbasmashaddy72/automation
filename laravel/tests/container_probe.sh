@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-[[ "${AUTOMATION_DISPOSABLE_CONTAINER:-}" == yes && -f /run/.containerenv ]] || { echo 'Disposable rootless-container opt-in required' >&2; exit 4; }
+[[ "${AUTOMATION_DISPOSABLE_CONTAINER:-}" == yes && -f /run/.containerenv ]] || {
+    echo 'Disposable rootless-container opt-in required' >&2
+    exit 4
+}
 export DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1
 cp -a /portable-laravel /opt/laravel-toolkit
 cd /tmp
@@ -13,7 +16,7 @@ apt-get install -y -qq --no-install-recommends python3 git ca-certificates
 # This adapter drives actual daemons, not a real systemd instance. Timer/autostart
 # lifecycle remains simulated and is reported explicitly by the outer harness.
 dpkg-divert --local --rename --add /usr/bin/systemctl
-cat > /usr/bin/systemctl <<'SH'
+cat > /usr/bin/systemctl << 'SH'
 #!/bin/bash
 set -e
 case "${1:-}" in daemon-reload|daemon-reexec|--system|--version|preset|disable|mask|unmask|is-enabled) exit 0 ;; esac
@@ -44,7 +47,7 @@ printf 'LARAVEL_STAGE=first-provision\n'
 bash /opt/laravel-toolkit/laravel-provision.sh --init-config --yes
 chown deploy:deploy /opt/laravel-toolkit/.env
 runuser -u deploy -- python3 -B /opt/laravel-toolkit/scripts/validate.py > /tmp/laravel-offline-validation.json
-python3 - <<'CHECK'
+python3 - << 'CHECK'
 import json
 report=json.load(open("/tmp/laravel-offline-validation.json"))
 assert report["summary"]["fail"]==0
@@ -61,12 +64,12 @@ printf 'FRESH_PROVISION=yes\nREPEAT_PROVISION=yes\nNATIVE_NGINX_FPM_POSTGRES=yes
 printf 'LARAVEL_STAGE=framework-fixture\n'
 runuser -u deploy -- composer create-project --prefer-dist --no-install --no-scripts --no-interaction laravel/laravel /tmp/laravel-source 12.0.0
 runuser -u deploy -- sh -c 'cd /tmp/laravel-source && composer install --no-dev --no-scripts --no-interaction --prefer-dist'
-cat > /tmp/laravel-source/package.json <<'JSON'
+cat > /tmp/laravel-source/package.json << 'JSON'
 {"name":"deployment-fixture","version":"1.0.0","private":true,"scripts":{"production-build":"node -e \"require('fs').writeFileSync('public/built.txt','fixture')\""}}
 JSON
 chown deploy:deploy /tmp/laravel-source/package.json
 runuser -u deploy -- sh -c 'cd /tmp/laravel-source && npm install --package-lock-only --ignore-scripts --no-audit --no-fund && git init -b main && git config user.name Fixture && git config user.email fixture@example.invalid && git add . && git commit -qm initial'
-python3 - <<'PY'
+python3 - << 'PY'
 import base64,os,pwd,json,hashlib
 from pathlib import Path
 root=Path('/srv/laravel-fixture');user=pwd.getpwnam('deploy')

@@ -3,31 +3,31 @@
   "packages": [
     {
       "id": "brave-browser",
-      "category": "Browsers and Desktop Applications",
+      "category": "Browsers",
       "source": "catalog",
       "default": true
     },
     {
       "id": "firefox",
-      "category": "Browsers and Desktop Applications",
+      "category": "Browsers",
       "source": "catalog",
       "default": true
     },
     {
       "id": "firefox-developer-edition",
-      "category": "Browsers and Desktop Applications",
+      "category": "Browsers",
       "source": "catalog",
       "default": true
     },
     {
       "id": "google-chrome",
-      "category": "Browsers and Desktop Applications",
+      "category": "Browsers",
       "source": "catalog",
       "default": true
     },
     {
       "id": "torbrowser-launcher",
-      "category": "Browsers and Desktop Applications",
+      "category": "Browsers",
       "source": "catalog",
       "default": true
     },
@@ -309,7 +309,7 @@
     },
     {
       "id": "flatpak",
-      "category": "Browsers and Desktop Applications",
+      "category": "Package Management",
       "source": "catalog",
       "default": true
     },
@@ -326,19 +326,7 @@
       "default": true
     },
     {
-      "id": "ai-ollama",
-      "category": "Local AI Tools",
-      "source": "ai",
-      "default": false
-    },
-    {
       "id": "ai-llamacpp",
-      "category": "Local AI Tools",
-      "source": "ai",
-      "default": false
-    },
-    {
-      "id": "ai-vllm",
       "category": "Local AI Tools",
       "source": "ai",
       "default": false

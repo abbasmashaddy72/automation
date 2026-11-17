@@ -1,3 +1,5 @@
+> **Historical reference (pre-v2.1):** For the current llama.cpp-only installation use [INSTALL-LLAMACPP-FIRST.md](../INSTALL-LLAMACPP-FIRST.md). Archived commands for Ollama/vLLM are not active in the upgraded toolkit.
+
 # Project directories, Lerd PHP and Open WebUI
 
 The old installer module is removed. The [migration ledger](legacy-migration.md)
@@ -62,6 +64,14 @@ or advertised. Real device access is not certified by export tests.
 
 ## Rootless Open WebUI
 
+Open **Local AI → Open WebUI** in the dashboard. Review the loopback port and
+pinned official image, then approve installation. Select **Download the pinned
+image if missing** for the first install when the image is absent. The container
+continues running after the dashboard closes. Refresh status during startup,
+then use **Test Open WebUI** to check app readiness and confirm that requests
+without credentials are rejected. Use **Launch Open WebUI** to create or sign
+into your account. Test actual inference under **Models & Testing**.
+
 Choose and review an exact upstream image digest; replace the placeholder with 64
 lowercase hexadecimal digits:
 
@@ -69,6 +79,7 @@ lowercase hexadecimal digits:
 bash setup.sh webui plan --image ghcr.io/open-webui/open-webui@sha256:REVIEWED_DIGEST
 bash setup.sh webui install --image ghcr.io/open-webui/open-webui@sha256:REVIEWED_DIGEST --yes
 bash setup.sh webui status
+bash setup.sh webui test
 bash setup.sh webui stop --yes
 bash setup.sh webui start --yes
 bash setup.sh webui remove --yes
@@ -81,16 +92,17 @@ bash setup.sh webui recover --yes
 Installed local rootless Podman is required; remote connection environment settings
 are ignored. Cached pinned images are used by default. Add `--allow-pull --yes`
 only when explicitly approving the image download. No Docker/Podman service,
-group membership, firewall, existing container or Ollama binding is changed.
+group membership, firewall, existing container or llama.cpp binding is changed.
 WebUI publishes on `127.0.0.1:3000`; select a different unprivileged port when
 installing. Authentication remains enabled.
 
-The default Ollama endpoint inside the container is
-`http://host.containers.internal:11434`, following the
-[upstream Podman guidance](https://docs.openwebui.com/getting-started/quick-start/).
-Reachability depends on the existing network; the toolkit never exposes or
-reconfigures an existing Ollama service to make it reachable. Container running
-state alone does not prove app readiness, connectivity or inference.
+Open WebUI uses the OpenAI-compatible llama.cpp endpoint
+`http://host.containers.internal:8080/v1` and disables its Ollama provider.
+Host loopback reachability depends on the [Podman networking mode](https://docs.podman.io/en/stable/markdown/podman-run.1.html).
+On hosts where it cannot reach the loopback-only service, configure an existing
+authenticated gateway in the application's connection settings. The toolkit
+does not change host bindings or firewall rules to make it reachable.
+Container state alone does not prove provider connectivity.
 
 An intent file is written privately before resource creation. Ownership is
 committed only after observing the exact container ID/image/label/data mount and
@@ -108,6 +120,16 @@ without a volume creation identity cannot authorize recreation automatically.
 Image upgrades need a separate application-data backup and migration review;
 `recreate` does not silently switch images or apply database migrations from a new
 version.
+
+## ChatGPT Lite background mode
+
+After building ChatGPT Lite, choose **Start in background** in the dashboard or
+run `bash setup.sh chat-lite start --yes`. A systemd user manager runs the built
+client on loopback, on port 3001 by default. It continues after the dashboard
+closes for the lifetime of the user manager. Use **Test ChatGPT Lite** to check
+the page and **Stop background service** (CLI: `bash setup.sh chat-lite stop
+--yes`) before rebuilding. Dashboard-session preview is available on systems
+without a user manager. Starting a client does not start llama.cpp.
 
 ## Actual app sandbox
 
@@ -130,15 +152,15 @@ teardown using digest
 `sha256:82cb66ea03829d29b27b66214e740ccc31101415e67c2db2338456e081356dfe`.
 The normal result is in `validation/webui-migration/webui-sandbox.json` under
 the toolkit's state directory. This does not certify other image versions or
-connectivity to an existing Ollama server.
+connectivity to the host inference service.
 
 ## Verification boundaries
 
-| Workflow | Evidence | Independent gates |
-|---|---|---|
-| Project layout | Disposable filesystem dry-run/repeat/conflict/link/preservation tests | Existing Valet conversion is retired |
-| PHP | Lerd-only guidance and retired-export refusal tests | No host PHP/INI or Lerd services mutated |
-| USB export | Input, checksums, permissions, no-overwrite and CLI no-write tests | Real device access/manual activation |
+| Workflow        | Evidence                                                                                               | Independent gates                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Project layout  | Disposable filesystem dry-run/repeat/conflict/link/preservation tests                                  | Existing Valet conversion is retired                                   |
+| PHP             | Lerd-only guidance and retired-export refusal tests                                                    | No host PHP/INI or Lerd services mutated                               |
+| USB export      | Input, checksums, permissions, no-overwrite and CLI no-write tests                                     | Real device access/manual activation                                   |
 | WebUI lifecycle | Receipt/ownership/recovery/recreation and remote-engine refusal regressions; actual app sandbox output | Browser UX, provider connectivity/inference and image-version upgrades |
 
 Existing GNOME/KDE sessions, host user systemd/autostart, GPUs and production

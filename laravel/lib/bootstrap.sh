@@ -4,22 +4,29 @@ laravel_main() {
     local workflow="$1" arg readonly=0 approved=0
     shift
     for arg in "$@"; do
-        case "$arg" in --help|-h|--check|--dry-run) readonly=1 ;; --yes) approved=1 ;; esac
+        case "$arg" in --help | -h | --check | --dry-run) readonly=1 ;; --yes) approved=1 ;; esac
     done
-    if ! command -v python3 >/dev/null 2>&1 || ! python3 -I -S -c 'import sys;sys.exit(0 if sys.version_info >= (3,9) else 1)' 2>/dev/null; then
-        if (( readonly || ! approved )); then
+    if ! command -v python3 > /dev/null 2>&1 || ! python3 -I -S -c 'import sys;sys.exit(0 if sys.version_info >= (3,9) else 1)' 2> /dev/null; then
+        if ((readonly || !approved)); then
             printf 'Python 3.9+ is required. On supported Ubuntu, authorize this workflow with --yes to bootstrap python3 from configured native repositories.\n' >&2
             return 69
         fi
         local os_id='' os_version='' key value
         while IFS='=' read -r key value; do
-            value="${value#\"}"; value="${value%\"}"
+            value="${value#\"}"
+            value="${value%\"}"
             case "$key" in ID) os_id="$value" ;; VERSION_ID) os_version="$value" ;; esac
         done < /etc/os-release
-        [[ "$os_id" == ubuntu && "$os_version" =~ ^(22\.04|24\.04|26\.04)$ ]] || { printf 'Python bootstrap supports Ubuntu 22.04/24.04/26.04 only.\n' >&2; return 3; }
+        [[ "$os_id" == ubuntu && "$os_version" =~ ^(22\.04|24\.04|26\.04)$ ]] || {
+            printf 'Python bootstrap supports Ubuntu 22.04/24.04/26.04 only.\n' >&2
+            return 3
+        }
         local elevate=()
-        if (( EUID != 0 )); then
-            command -v sudo >/dev/null 2>&1 || { printf 'An administrator must install python3 first.\n' >&2; return 69; }
+        if ((EUID != 0)); then
+            command -v sudo > /dev/null 2>&1 || {
+                printf 'An administrator must install python3 first.\n' >&2
+                return 69
+            }
             elevate=(sudo -n)
         fi
         "${elevate[@]}" apt-get -o DPkg::Lock::Timeout=120 update || return $?

@@ -1,3 +1,5 @@
+> **Historical reference (pre-v2.1):** For the current llama.cpp-only installation use [INSTALL-LLAMACPP-FIRST.md](../INSTALL-LLAMACPP-FIRST.md). Archived commands for Ollama/vLLM are not active in the upgraded toolkit.
+
 # Unified setup
 
 Run Bash scripts with `bash` from Bash, Fish or Zsh. Python 3.9+ is required after bootstrap.
@@ -15,6 +17,68 @@ bash setup.sh packages install --select REQUEST --replace REQUEST=EXACT_NATIVE -
 ```
 
 Direct installation automatically preflights Python; llama.cpp builds also preflight Git, CMake, Make, C++ and CA certificates. Lerd installation checks Podman on eligible systemd hosts. Optional Gum is never installed implicitly by wizard preflight. All sources must already be configured and verified by their native manager. Offline cache absence reports unavailable; it never justifies repository additions. No fuzzy replacement is installed automatically. Exit 5 means at least one selection is unavailable.
+
+In the wizard, use Space to check the categories you want and then press Enter. Choose **All categories** for a full catalog review. In the text wizard, enter category numbers or `all`. Choosing only **Browsers** checks only browser packages. The final review shows the package IDs and sources awaiting installation approval.
+
+Open the graphical dashboard with `bash setup.sh dashboard open` or choose it from `bash setup.sh menu`. The dashboard opens on **System**, with operating system, hardware, storage and AI eligibility. In **Packages**, select from the searchable catalog or expand **Custom package** to look up configured sources. Choose **Next: preview selected packages** to review verified IDs and sources, then **Proceed with installation**. The package manager resolves dependencies at execution. Use **Previous** to revise the selection. Reinstall appears in the confirmation only for installed selections. **Download plan JSON** saves the resolved selections. The native replay workflow is `bash setup.sh packages restore PLAN.json --dry-run`; review the result before applying. Mixed-provider plans also record their sources and can be used as an inventory.
+
+Launch the dashboard from your regular interactive terminal to apply changes. Each tab keeps its own operation output for the current dashboard session. A modal highlights pending sudo authentication or AUR recipe review. Respond in the launching terminal. The dashboard listens only on loopback. Press Ctrl+C in the terminal to close it. The existing `dashboard export REPORT.html` command creates a standalone report.
+
+**Configure → Lerd** checks for the executable and host compatibility. On supported hosts, **Review and install Lerd** previews the official installer when the executable is missing. **Review Lerd setup or repair** previews running setup with the existing executable. The toolbar asks for confirmation before applying either action. [Lerd installation guide](https://lerd.sh/getting-started/installation)
+
+**System** reads KDE, Qt, CPU and graphics details from KDE's system information when available. Other desktops use the Linux hardware inventory. Manufacturer, product and system version come from available firmware data.
+
+An installed native alias satisfies the selection, including `intellij-idea-oss` for IntelliJ IDEA Community on Arch-based distributions. On Arch, missing packages use verified native repositories or an enabled exact AUR match. If neither resolves, review the search results and select the actual package ID. Flatpak installation on Arch requires the explicit Flatpak preference. Other supported distributions retain their configured Flatpak fallback.
+
+On Arch-family distributions, the dashboard detects working Shelly, yay, paru and Pamac commands. Exact matches from working helpers can enter the reviewed plan without another enable prompt. Noninteractive CLI calls require `--enable-aur` or saved approval. [Shelly CLI reference](https://www.seafoam-labs.org/shelly-alpm/docs/cli-reference/#shelly-search-aur)
+
+To approve the toolkit package plan from the CLI, add `--no-confirm` to `packages install` or `packages repair`. It has the same approval scope as `--yes` for those commands. For Postman via AUR:
+
+```bash
+bash setup.sh packages install --select postman-bin --enable-aur --no-confirm
+```
+
+Sudo authentication and Shelly's AUR prompts stay in the terminal. AUR installs using the toolkit flag require interactive terminal input. Shelly 3.2.1 uses its own `--no-confirm` to automatically accept ordinary recipe reviews and the final install transaction, so the toolkit leaves that flag off AUR helper commands. [Shelly AUR safety guide](https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/)
+
+**Configure** includes Zed telemetry status, disable and restore. Restore uses a private receipt for the two Zed telemetry keys. **Maintenance** includes diagnostics, inventory and toolkit cache cleanup. **Local AI** detects llama.cpp, Ollama and vLLM through local executables, process names and systemd units. The toolkit manages llama.cpp. Preview the managed install, select an existing GGUF path, and install or control its owned service from the dashboard. Use the CLI for custom storage, model downloads, or tuning. See [managed llama.cpp](../INSTALL-LLAMACPP-FIRST.md).
+
+### Local AI and Project Sites
+
+Use **Local AI → AI Configuration** to choose this computer or a trusted SSH server. The selection is shared by installation, model storage and testing. **AI Installation** has two steps: **Check and build**, then **Configure service**. You can compile llama.cpp before choosing a model or let the first local installation build it. The service page links directly to the model picker, which offers a return to service configuration after selection. The eligibility preview shows a summary and detailed JSON.
+
+The save confirmation on AI tabs means the dashboard stored the choices in this browser. **Build binary only** compiles the executable. In **Configure service**, choose a GGUF, use **Preview configuration**, then approve **Install and test** to save the host configuration, register the systemd service, enable it at boot and start it. A running service continues after closing the terminal and dashboard. The dashboard displays saved host configuration, service state, boot enablement and API readiness separately.
+
+**Configure → Terminal** detects Bash, Fish and Zsh, offers native installation for missing shells, and has a separate account login-shell action. Apply toolkit settings separately to each shell you use. The Fish greeting, fetch banner, existing toolkit SSH agent and exact legacy-block migration are optional. Review changes before applying, then open a new terminal. The existing private developer backup and restore workflow protects previous settings. Lerd and the shells have dedicated dashboard pages, while existing CLI package plans still work.
+
+Applying shell settings writes a short, marked source block into the startup file. It replaces an older toolkit-managed block and preserves surrounding settings. The helper stays in the toolkit checkout. If you move the checkout, reapply from its new location. Banner display and Terminal AI are interactive-only.
+
+Use **Preview existing configuration** to inspect the selected shell's current startup file before reviewing a change. The read-only preview shows the path and distinguishes missing and empty files. It opens on request and keeps the contents out of operation output. Shell files can contain private values.
+
+Choose each development command, cleanup alias and Terminal AI command in **Configure → Terminal**. A fresh toolkit block starts with no commands selected. Previously managed commands are loaded as saved. Lerd detection provides context for deciding whether to enable Sail. The optional Fish and Zsh cleanup aliases delete the corresponding dependency directory and lockfile when invoked, then reinstall. Existing definitions take precedence. When replacing recognized legacy blocks, select the commands to keep in the new toolkit block.
+
+Dashboard links retain the current tab across refresh and support browser Back and Forward. For example, `#configure/terminal/zsh` opens Zsh settings and `#ai/ai-model-setup/testing` opens model testing.
+
+With Terminal AI enabled and llama.cpp running, use `ai ask "How do I check port 8080?"` or `systemctl status automation-llamacpp | ai ask "Why is this failing?"`. Run `ai suggest "find large files in this directory"` to print one suggested command. In an interactive Bash, Fish or Zsh prompt, type a partial command or request and press **Ctrl+X**, then **Ctrl+A**. The suggestion fills the editable command line so you can review it before pressing Enter. Existing shortcut bindings take precedence. If another tool already uses `ai`, use `automation_ai`. Terminal AI sends your prompt or selected input to the local server without capturing terminal history.
+
+The service port is the HTTP listener on the inference host's loopback interface, normally `http://127.0.0.1:8080/v1`. Leave it blank to retain the installed port or use 8080 for a new service. **Check loopback port** distinguishes a free port, a healthy llama.cpp API and a port that cannot be bound or verified. The toolkit LAN gateway requires the backend port 8080. SSH checks run against the server's own loopback.
+
+**Local AI → Models & Testing → Storage & Downloads** scans the chosen data root and its immediate `models/` folder for reusable single-file GGUFs. It excludes symlinks and incomplete or split-model filenames. The searchable catalog fills each pinned download's URL, exact bytes and SHA-256. Custom local downloads require an independently verified SHA-256 and byte size. For SSH, choose a server-side file or use the reviewed download and install commands from the remote toolkit directory. Use an updated toolkit on both hosts for the new diagnostics.
+
+**Models & Testing → Testing** shows the managed service's configured model, port and token budget. Verify API health and loaded models, read the effective context per slot from the running server, or approve a short generation test. To change context, review the total token budget and its estimated share per parallel slot. Increasing context needs verified GGUF training metadata and uses more RAM or VRAM. Approved changes restart the managed service, check runtime context and generation, and restore the prior settings if a check fails. For SSH targets, the dashboard previews the change and provides the command to apply in the server's interactive terminal.
+
+The catalog prioritizes fitting 2026 Qwen3.5 0.8B, 2B, and 4B GGUF options, while retaining older models for compatibility. Qwen3.5 requires a recent compatible llama.cpp build. The catalog refreshes on open using the selected model folder and inference backend. Recommended entries account for CPU architecture, threads, vector instructions, current free RAM and disk, and usable VRAM when it can be measured for a compatible GPU build. The **All catalog models (manual selection)** list also includes fit warnings and the TeichAI Qwen3 4B math model distilled from DeepSeek V3.2 Speciale. The model card identifies it as a community Qwen3 distillation. [TeichAI model card](https://huggingface.co/TeichAI/Qwen3-4B-Thinking-2507-DeepSeek-v3.2-Speciale-Math-Distill-GGUF)
+
+For hybrid CPU/GPU inference, start with automatic layer offload on a compatible CUDA build. Advanced users can set a layer count. Qwen3 4B Instruct 2507 has 36 transformer layers, so 25 of those layers is roughly 70%. That is a layer ratio, and actual GPU utilization and memory depend on context and other allocations. The small DeepSeek catalog entry is the R1-Distill-Qwen 1.5B variant. [llama.cpp GPU options](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md) · [DeepSeek model lineup](https://github.com/deepseek-ai/DeepSeek-R1#3-model-downloads)
+
+**Local AI → Open WebUI** shows the rootless Podman deployment and its readiness. Choose **Review installation** to confirm the port, pinned image and data volume. The app runs independently of the dashboard. Use **Start Open WebUI** or **Stop Open WebUI** to control it, and **Test Open WebUI** to check the app and its sign-in requirement. Test model generation under **Models & Testing**. [Open WebUI Podman guide](https://docs.openwebui.com/getting-started/quick-start/)
+
+**Local AI → ChatGPT Lite** distinguishes build output from a running server. After building, choose **Start preview** for a dashboard-session server or **Start in background** to keep it running after the dashboard closes. Background mode requires a systemd user manager and runs for its lifetime. The dashboard verifies the loopback page before showing the link. Use **Test ChatGPT Lite** to repeat the check.
+
+**Configure → Configuration and Project Sites** previews every missing folder and file. The optional PHP checkbox creates `Testing/toolkit-php-check/index.php` only when absent. It returns a plain readiness message and exposes no PHP configuration. The same option is available with `bash setup.sh projects layout --php-sample --dry-run`. The sample requires a PHP-capable development server to execute.
+
+### Source formatting
+
+Run `python3 scripts/format.py --check` in a Git checkout to review formatting across supported source files. Use `--write` to apply formatting, or append checkout-relative paths to limit the scope, such as `python3 scripts/format.py --write lib/dashboard_ui`. The command uses Prettier for web assets, Markdown, JSON and YAML, Ruff for Python, and shfmt for shell scripts. It uses installed tools, including the existing ChatGPT Lite Prettier when available. It skips ignored untracked files, symlinks, generated dependency lockfiles, binary assets and templates.
 
 `--check` overrides a mutating request; `--dry-run` cannot write exports, clear caches, send inference prompts or initialize configuration. Plan exports are deliberately disabled by the read-only contract. Use `packages export --output /tmp/plan.json`, profile export, or dashboard export explicitly when you want files written.
 
@@ -136,66 +200,10 @@ The remaining 25 manual tasks retain stable IDs and private progress under the c
 
 ## Existing AI state migration
 
-```bash
-bash setup.sh ai vllm model-search --query coder --rank downloads --scope hub --offset 0 --limit 20
-bash setup.sh ai vllm model-files --model HuggingFaceTB/SmolLM2-135M-Instruct --revision 12fd25f77366fa6b3b4b768ec3050bf629380bac
-bash setup.sh ai llamacpp model-files --model PUBLISHER/MODEL --revision EXACT_40_HEX_COMMIT --quant Q4_K_M
-bash setup.sh ai vllm key-import --legacy-key-file /absolute/private/old-vllm-api.env --dry-run
-bash setup.sh ai llamacpp legacy-plan --legacy-unit "$HOME/.config/systemd/user/llamacpp-local.service"
-```
-
-Model search supports downloads/likes/trending activity and pagination, not quality rankings. Warm means hosted inference availability. `model-files` reads bounded public metadata at an exact commit, reports publisher sizes/checksums and pinned HTTPS URLs, and rejects incomplete GGUF shard sets. Independently verify size/SHA-256 before explicit downloads; missing publisher SHA-256 remains missing. No dependency, model, export file or receipt is installed by discovery. See the [Hub API](https://huggingface.co/docs/hub/en/api) and [official metadata client](https://github.com/huggingface/huggingface_hub/blob/main/src/huggingface_hub/hf_api.py).
-
-`key-import --yes` reads only an explicit private owned raw key or single `VLLM_API_KEY=value` file as data. It copies to the private toolkit destination without printing the key, sourcing data, replacing a different key or changing the original. Existing endpoints keep their loaded keys until separately restarted.
-
-CPU llama.cpp `legacy-import --legacy-unit PATH --yes` imports supported native command settings into a **new** owned service, preserving model alias, model path, port, context, threads, quota and private raw-key path. Review `legacy-plan` first, then stop and disable the exact old unit yourself. Import verifies that state and refuses an existing destination, foreign unit, GPU/non-loopback command, unsupported environment override, ambiguous/unknown flags or changed input. The old unit, model/cache data and keys are never modified or deleted; imported assets gain no download/deletion receipt. New service start/autostart are separate actions. This imports supported settings, not arbitrary old service directives or legacy uninstall behavior.
-
-### Existing vLLM CPU settings
-
-```bash
-bash setup.sh ai vllm legacy-plan --legacy-unit "$HOME/.config/systemd/user/vllm-local.service" --model /absolute/reviewed/local-snapshot --key-file /absolute/private/imported-key
-# After reviewing the plan and separately stopping/disabling the exact old unit:
-bash setup.sh ai vllm legacy-import --legacy-unit "$HOME/.config/systemd/user/vllm-local.service" --model /absolute/reviewed/local-snapshot --key-file /absolute/private/imported-key --yes
-bash setup.sh ai vllm configure --executable /absolute/reviewed/vllm --model /absolute/local-snapshot --model-alias publisher/model --dtype float32 --kv-cache-gib 1 --cpu-threads 2 --dry-run
-```
-
-The importer now supports the old vLLM `serve` command, dtype, context, quota, OMP threads, CPU KV-cache size, `nobind` affinity and paired native Hermes/Qwen3-Coder tool-parser flags. Supply an explicit local model directory: remote repository IDs are never resolved or downloaded implicitly. The old repository ID becomes the served alias so clients keep their model identifier. New configuration accepts `--dtype auto|bfloat16|float32|float16`, `--kv-cache-gib 1..64` and an explicit supported `--tool-parser`; hardware suitability is still a separate review.
-
-Literal allowlisted environment entries are parsed as data. An old `EnvironmentFile` must contain a private single native key; import it separately using `key-import` and supply the matching private `--key-file`. A different key is refused. Unknown variables, shell/systemd expansions, unpaired tool flags and arbitrary service directives are refused. An executable allocator preload is never imported: review it and use `--ignore-legacy-preload` only if intentionally omitting that optimization. Old units, selected-model files, caches, keys and service states remain unchanged.
-
-vLLM invocations use a fresh private runtime cache under `${XDG_CACHE_HOME:-~/.cache}/automation-toolkit/ai/vllm`, not the legacy Hub/runtime directories. Creation occurs only when actually launching the approved runtime; planning, configuration and dry-run create none. Native key values stay out of argv. The runtime clears inherited vLLM overrides, external Hub-cache paths, allocator/Python hooks and external plugin selection, then applies reviewed CPU settings with Hub/Transformers offline. This does not install a CPU wheel, certify a host systemd session or migrate Playground. References: [vLLM CPU guide](https://docs.vllm.ai/en/stable/getting_started/installation/cpu/), [native environment settings](https://docs.vllm.ai/en/stable/configuration/env_vars/).
-
-### Revision-aware cache inventory and verified copies
-
-```bash
-bash setup.sh ai vllm cache-list --cache-root /absolute/existing/hub
-bash setup.sh ai vllm snapshot-import --cache-root /absolute/existing/hub --manifest /absolute/reviewed-model.json --root /absolute/private/toolkit-snapshots --dry-run
-bash setup.sh ai llamacpp snapshot-import --source-dir /absolute/legacy-model-directory --manifest /absolute/reviewed-gguf.json --root /absolute/private/toolkit-snapshots --dry-run
-bash setup.sh ai vllm snapshot-remove --root /absolute/private/toolkit-snapshots --model publisher/model --revision EXACT_40_HEX_COMMIT --dry-run
-```
-
-Cache inventory is read-only, bounded and revision-aware. Expected Hub snapshot file links are accepted only when they resolve directly into the same repository's regular blob files; escaping, cyclic and directory links are refused. It reports logical bytes per revision, which may share storage; the sum is not a promise of reclaimable disk space. Inventory grants no ownership or deletion permission. See the [official cache layout](https://huggingface.co/docs/huggingface_hub/guides/manage-cache).
-
-Prepare a manifest containing independently reviewed SHA-256 values and exact sizes for **every selected asset**:
-
-```json
-{
-  "schema": 1,
-  "repository": "publisher/model",
-  "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "files": [
-    {"path": "config.json", "size": 2, "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"}
-  ]
-}
-```
-
-This illustrative config-only manifest does not constitute a runnable model. Include the weights, tokenizer and configuration assets needed by the chosen runtime, and verify all identities/checksums independently; publisher metadata is discovery evidence. Duplicate fields/paths, unsafe paths, executable/pickle assets, incomplete shard series and oversized inputs are refused. No checksum is invented for an unverified source. Directory copying supports regular legacy GGUF assets; Hub copying supports the validated revision/blob layout. No Hub package, pip dependency or model download is needed.
-
-Apply `snapshot-import` with `--yes` after review. It checks source bytes and free disk, copies into private staging, rechecks copied bytes and publishes files exclusively at `ROOT/PUBLISHER/MODEL/REVISION`. No original model/cache is renamed, hardlinked into the result, deleted or granted a new ownership receipt. A receipt commits the observed copy only after publication; repeated import verifies and reuses an unchanged owned copy. Existing unmanaged/conflicting destinations are refused, including empty directories. A caught interruption can leave an incomplete destination without a receipt, preserved for manual review; it is never silently adopted, reused or recursively removed.
-
-`snapshot-remove --yes` removes only an exact receipt-owned copy after checking all bytes, permissions, links and entries. Later edits, unknown files/directories, changed file permissions/links or a related active/unknown toolkit service cause refusal; no service is stopped. External caches are never deleted. Removal is irreversible for the selected copy; the preserved source can be copied again into a new empty destination. Manually started/untracked applications are outside toolkit service-state detection. No model code or inference runs during inventory/copy/removal, and a successful copy does not prove RAM fit or runtime compatibility.
-
-The old vLLM cache-removal helper is removed. Its retained compatibility caller reuses shared inventory, and deletion requests fail **before** changing services or selection files. Unreceipted cache deletion is retired rather than presented as safe ownership.
+Only llama.cpp inference is managed. Existing third-party services, their
+settings and model stores are preserved. Use the verified GGUF workflow below
+to copy compatible assets. For runtime installation and model switching, see
+[the dedicated server guide](../INSTALL-LLAMACPP-FIRST.md).
 
 ### Complete GGUF bundles and old selection recovery
 
@@ -206,7 +214,6 @@ bash setup.sh ai llamacpp gguf-download --manifest /absolute/reviewed-gguf-bundl
 bash setup.sh ai llamacpp gguf-list
 bash setup.sh ai llamacpp gguf-resolve --manifest /absolute/reviewed-gguf-bundle.json
 bash setup.sh ai llamacpp gguf-legacy-import --legacy-root /absolute/old-llamacpp --manifest /absolute/reviewed-gguf-bundle.json --dry-run
-bash setup.sh ai llamacpp gguf-select --legacy-root /absolute/old-llamacpp --manifest /absolute/reviewed-gguf-bundle.json --dry-run
 bash setup.sh ai llamacpp gguf-remove --manifest /absolute/reviewed-gguf-bundle.json --dry-run
 ```
 
@@ -237,31 +244,53 @@ Before the first network/write, bundle download validates all existing artifact 
 
 Default published bundles live under `~/.local/share/automation-toolkit/ai/gguf-bundles/QUANTIZATION/PUBLISHER/MODEL/REVISION`; `--root` selects a separate private base store. The private `.downloads/QUANTIZATION/...` cache is retained for reuse. `gguf-list` hashes and validates owned bundles and labels incomplete/changed/unmanaged entries unverified. `gguf-resolve` and selection refuse those entries. Removing a bundle requires the exact reviewed manifest, an unchanged observed-copy receipt and an explicit `--yes`; related active/unknown toolkit service state causes refusal without stopping it. Download caches and original models are preserved by bundle removal.
 
-Legacy inventory reads bounded `.llama-automation.json`, `config/selected-model` and `config/runtime-settings` as data, validating exact repository/folder/quantization identities, complete file sets and GGUF headers. Corrupt old selection/context is refused by default. For explicit recovery, `--ignore-legacy-state` with `--legacy-root` on `gguf-legacy-list`, `gguf-legacy-import` or `gguf-select` omits those two scalar files without reading or editing them; model markers/assets still require full validation and the reviewed manifest. New selection then uses an explicit `--context` or normal owned-controller settings, never an invented old value. A legacy marker is **not** a checksum receipt or deletion authorization. `gguf-legacy-import --yes` copies only the manifest-matching independently checked assets into a separate store outside the old tree, preserving old models, markers, selection files and unrelated contents. It does not infer a missing revision or hash from the old marker. Use the old repository and explicit reviewed quantization; a repository-only old selection does not prove which quantization was active.
-
-`gguf-select --yes` configures the new owned llama.cpp service from the verified primary file with alias `REPOSITORY:QUANTIZATION` (or an explicit reviewed `--model-alias`). With `--legacy-root`, the old selected repository must match, and its validated context is recovered unless overridden by `--context`. Existing executable/key/port/CPU settings follow the normal controller rules. No service is started, enabled or stopped; active new services refuse reconfiguration. Old units and files remain intact. Selecting a bundle does not certify host systemd operation, GPU acceleration or the fit of an arbitrary model/context combination.
-
 The separate legacy GGUF helper is removed. Its remaining compatibility caller shares read-only list/resolve logic for existing files. Unpinned old download requests fail before dependency or file changes; the existing-model compatibility path requires explicit `--download=no` and validates selection before prerequisites. Marker-only deletion fails before touching services or selection files. No new virtual environment, uv or Hub package is installed just to manage GGUF metadata. These compatibility paths are not normal setup entrypoints.
-
-AI `configure` creates only a toolkit-owned user unit and a private allowlisted manifest. `start`, `stop`, `restart`, `service-status`, `logs`, `autostart --enabled yes|no` and `uninstall` apply only to that unit. Model/key assets must validate before starts; stopping/removing the owned unit remains possible if its model or key was removed. Existing legacy units are never adopted. A successful service command is not proof of API readiness: run `test-api` and `test-auth`. `model-select` reuses explicit configuration and refuses changes while active. Native vLLM execution uses a reviewed existing executable and local model directory, with remote downloads/code disabled.
 
 Native package transactions retry only recognized lock/busy errors, up to `AUTOMATION_RETRIES`; other errors and timeouts remain failures. AI build prerequisites run after AI flags are validated, and status/lifecycle operations never install compilers. Cancellation exits 130.
 
 Current test scopes live in the normal validator output under `~/.local/state/automation-toolkit/validation/`. Offline tests, native container package tests, static systemd checks and actual CPU inference are distinct from real host service/desktop/GPU verification. No release deliverable generation is part of local refactoring.
 
-Ollama CLI status/model operations explicitly bind their client target to the selected literal loopback address and remove proxy overrides; an inherited remote `OLLAMA_HOST` cannot redirect diagnostics or model requests. Publisher/native package metadata parsers run with `LC_ALL=C` in child processes only, so translated labels do not produce false missing-package results. Existing llama.cpp source checkouts must have the official upstream origin before build/update.
-
 ## Compatibility boundaries
 
-| Representative environment | Native detection/search/core package workflow | Host services / desktop / GPU |
-|---|---|---|
-| Arch base | Disposable rootless container verified | Not certified by that test |
-| Debian 13 / Ubuntu 24.04 | Disposable rootless containers verified | Not certified by those tests |
-| Fedora 42 / Rocky 9 | Disposable rootless containers verified; explicit Fedora wget2 replacement | Not certified by those tests |
-| openSUSE Tumbleweed | Disposable rootless container verified; version-specific Python mapping | Leap service/desktop behavior remains unverified |
-| Alpine 3.22 | Disposable rootless container verified | OpenRC does not imply systemd-user/Lerd support |
-| CachyOS KDE/Wayland session | Host detection and read-only desktop favorites plan verified | Desktop mutation and service installation were not performed |
-
-The package fixtures install/check Git, curl, wget (explicit wget2-wget choice on Fedora) and unzip, repeat the transaction, verify unavailable-package exit 5 and plan the catalogue. They also bootstrap the native SSH client/key commands, generate a disposable key, validate an isolated SSH configuration with `ssh -G` (no connection), and persist/list the manual checklist. They do not install or launch every GUI/server package. ShellCheck runs in disposable Debian; local absence is recorded, while shfmt style differences remain informational. The separate llama.cpp and vLLM CPU sandboxes verify real generated responses and protected endpoint authentication. The vLLM sandbox verifies every fixture artifact checksum, copies a pinned model through the snapshot importer, runs the shared invocation builder with dtype/CPU settings and alias, then removes its own copied snapshot and checks original-fixture preservation. The llama.cpp sandbox now serves a verified GGUF bundle; its optional `--with-gguf-shards` gate generates genuine tiny shards with upstream's full CPU image, imports them through the legacy-copy path and tests native inference/authentication. The extra image requires its own cache hit or `--allow-pull`; no host compiler, driver or writable host source mount is used. Only sandbox networking adapts the container-internal bind for rootless publication; host ports remain loopback-only. This establishes CPU-container behavior, not native host systemd or hardware-wide dtype/parser support. Jan uses an authenticated contract fixture only. Systemd unit syntax, supported legacy settings import and owned control paths are tested independently from actual host service operation. SSH passphrase prompts have fixture coverage; isolated native agent protocol/key loading and teardown are tested separately from actual host user-session/autostart behavior. No real provider enrollment is claimed.
+| Representative environment  | Native detection/search/core package workflow                              | Host services / desktop / GPU                                |
+| --------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Arch base                   | Disposable rootless container verified                                     | Not certified by that test                                   |
+| Debian 13 / Ubuntu 24.04    | Disposable rootless containers verified                                    | Not certified by those tests                                 |
+| Fedora 42 / Rocky 9         | Disposable rootless containers verified; explicit Fedora wget2 replacement | Not certified by those tests                                 |
+| openSUSE Tumbleweed         | Disposable rootless container verified; version-specific Python mapping    | Leap service/desktop behavior remains unverified             |
+| Alpine 3.22                 | Disposable rootless container verified                                     | OpenRC does not imply systemd-user/Lerd support              |
+| CachyOS KDE/Wayland session | Host detection and read-only desktop favorites plan verified               | Desktop mutation and service installation were not performed |
 
 The current CPU source-build path was exercised in disposable Debian using the official llama.cpp checkout (0.8.0-dev, commit `4e910a8` for that run), including automatic Make/compiler bootstrap and `llama-server --version`. This verifies that tested CPU build environment, not every compiler/distro/GPU combination. Both CPU inference sandboxes also passed protected API checks; vLLM’s model-card context check confirmed 256 tokens and detected a 512-token mismatch. Exact subsequent run status remains in the normal validation JSON.
+
+Container package and checklist fixtures cover exact installation, repeat
+operations and safe configuration. They do not certify real desktop sessions,
+GPU inference or production services.
+
+### Dashboard review and apply
+
+Open `bash setup.sh dashboard open`. The dashboard uses a fixed loopback port so selections, model paths and checkboxes are remembered by your browser. Use the **Advanced** tab for the current toolkit settings, explicit true or false overrides, a custom absolute Project Sites directory and JSON overrides. Empty values restore defaults. Saved changes print a private backup ID that can be restored in Advanced. Shell environment overrides remain authoritative and are marked in the preview.
+
+Choose packages and any Project Sites, Zed or llama.cpp steps you intend to apply. For native packages, use the reinstall checkbox to review a reinstall instead of an installation. **Review all changes** validates the selection and reports package IDs, sources, project directories and the configured AI model directory and port. **Apply all changes** runs configuration and project setup first, then packages, Zed and Local AI. The floating **Setup checklist** opens a right-side panel with observed checks, manual tasks, and operation status. The panel shows pending, running, completed and failed actions. An unsuccessful action stops the sequence. Retry remaining actions from the same page or refresh the review if the package plan changed.
+
+Package alternatives must be verified against the configured native repository before being saved. The shared CLI saves them in the private `package-mappings.json` beside the toolkit journal. The mapping includes distribution, architecture, package manager, actual package ID and source. Pacman metadata distinguishes configured repositories and foreign packages. Toolkit receipts can identify the helper that actually performed a recorded installation. [Shelly command reference](https://www.seafoam-labs.org/shelly-alpm/docs/rosetta/)
+
+**System telemetry** supports the Debian Popularity Contest configuration on Debian and Ubuntu with the compatible cron package present. Disable adds a toolkit-owned opt-out drop-in and restore removes that drop-in. Zed telemetry and Zed settings backups are separate controls. [Debian Popularity Contest documentation](https://sources.debian.org/src/popularity-contest/1.79/README)
+
+In **Local AI**, the toolkit can install llama.cpp and control its own service. External Ollama and vLLM entries report observed local status. The launcher stays on loopback. A custom llama.cpp port requires the direct loopback configuration. The optional LAN gateway uses port 8080 internally. **ChatGPT Lite** previews its build paths and loopback URL, builds the checked-in client, and can clear its generated build directory.
+
+The **Zed settings** card in Configure provides settings and telemetry checks, apply, backup, and restore. Use **View current settings** for a read-only copy of the file. The editor previews changed keys and detected AI endpoints. If the proposed llama.cpp endpoint and model cannot be verified over loopback, the review shows the reason and offers **Apply anyway**. The CLI still validates each action and refuses conflicting restores.
+
+The browser shows when package installation is waiting for sudo. Authenticate in the launching terminal. A valid sudo ticket is reused and refreshed during the operation under the local sudo policy. Shelly presents its own recipe and dependency review in that terminal. After an AUR failure, choose package search, enter an alternative package ID, try another installed helper, or check for a verified Flatpak match beside the operation result. The dashboard previews the selected alternative before you approve installation.
+
+Check a manual task in the setup drawer to mark it as completed. Uncheck it to return it to pending. After an AUR failure, the alternative package field and search controls appear beside the operation result.
+
+### Dashboard sections
+
+**Home** links to the workflow pages and provides a read-only hardware check. In **Install**, select packages for review, then use **Preview selected packages** to resolve their exact sources. The confirmation offers **Reinstall selected packages** when the review includes installed packages. Reinstall resolves exact repository packages, verified native Shelly packages, an installed Flatpak's recorded remote, or an exact AUR recipe via an enabled helper. Helpers retain their normal recipe review. Alternative previews preserve other selections.
+
+**Advanced** contains combined setup review, apply, Project Sites and the Zed defaults checkbox. The editor shows the toolkit defaults separately from effective values. **Configure → Zed settings** can merge missing values, override the keys in a JSONC input, or replace the settings object. Preview lists added, changed and removed key paths. The existing private backup and restore workflow preserves the original file bytes. The toolkit validates JSONC structure and common setting types. Zed owns the complete, version-specific settings schema.
+
+**Maintenance → System Cleanup** inspects package caches, orphan candidates and journal usage. The preview counts native candidates and estimates their bytes. Arch systems with `paccache` can remove older cached package versions while retaining three. Debian-family systems can remove obsolete archives with APT autoclean. Unused packages, temporary files and logs are review information. [paccache manual](https://man.archlinux.org/man/paccache.8)
+
+CPU is the default for new builds. GPU detection identifies a build candidate and real inference verifies the installed configuration. SSH requires an updated toolkit at the specified server path, an already trusted host key and an existing SSH key or agent. Install, download and change context from the SSH terminal to handle native prompts. Dashboard start, stop or restart of the remote toolkit-owned service requires suitable noninteractive sudo authorization there. [OpenSSH manual](https://man.openbsd.org/ssh)
