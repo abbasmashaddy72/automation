@@ -1,5 +1,3 @@
-> **Historical reference (pre-v2.1):** For the current llama.cpp-only installation use [INSTALL-LLAMACPP-FIRST.md](../INSTALL-LLAMACPP-FIRST.md). Archived commands for Ollama/vLLM are not active in the upgraded toolkit.
-
 # Project directories, Lerd PHP and Open WebUI
 
 The old installer module is removed. The [migration ledger](legacy-migration.md)

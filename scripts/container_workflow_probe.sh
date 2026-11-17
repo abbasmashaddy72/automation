@@ -11,7 +11,8 @@ set -eu
     exit 4
 }
 case "${1:-}" in
-    arch) pacman -Sy --noconfirm ;;
+    # Keep the disposable rolling image aligned with its synced repositories.
+    arch) pacman -Syu --noconfirm ;;
     debian) apt-get update ;;
     fedora | rhel) dnf -y makecache ;;
     opensuse) zypper --non-interactive refresh ;;
@@ -27,6 +28,18 @@ cd /tmp/automation-workflow
 export XDG_STATE_HOME=/tmp/automation-private-state
 mkdir -m 700 "$XDG_STATE_HOME"
 bash setup.sh prerequisites install --runtime-only --without-ui --yes
+# Install GNU awk before Git in the disposable Tumbleweed fixture.
+# Replacing BusyBox awk later can remove its dependent Git packages.
+if [ "$1" = opensuse ] && [ "${AUTOMATION_WORKFLOW_SYSTEM_TESTS:-no}" = yes ]; then
+    if rpm -q busybox-gawk > /dev/null 2>&1; then
+        zypper --non-interactive remove busybox-gawk
+    fi
+    zypper --non-interactive install gawk
+    rpm -q gawk
+    command -v awk
+    printf 'FIXTURE_AWK_VARIANT=gawk\n'
+fi
+
 run_lint() {
     [ "$1" = debian ] || {
         echo 'Lint bootstrap is Debian-only' >&2
@@ -40,16 +53,6 @@ run_lint() {
 }
 
 run_system_tests() {
-    # The minimal Tumbleweed image ships a BusyBox awk variant that conflicts
-    # with the official Fish dependency. This is an explicit disposable-fixture
-    # variant replacement, never an automatic production solver override.
-    if [ "$1" = opensuse ] && rpm -q busybox-gawk > /dev/null 2>&1; then
-        zypper --non-interactive remove busybox-gawk
-        zypper --non-interactive install gawk
-        rpm -q gawk
-        command -v awk
-        printf 'FIXTURE_AWK_VARIANT=gawk\n'
-    fi
     # Exact native shell packages only; repository absence is an explicit
     # capability skip, never a reason to add third-party repositories.
     for shell in fish zsh; do
@@ -61,6 +64,9 @@ run_system_tests() {
             printf 'OPTIONAL_SHELL_UNAVAILABLE=%s\n' "$shell"
         fi
     done
+    bash setup.sh packages install --select rsync --replace rsync=rsync --no-lerd --no-auto-search --yes
+    command -v rsync
+    command -v git
     mkdir -m 700 /tmp/automation-test-home
     chown -R 65534:65534 /tmp/automation-test-home /tmp/automation-workflow
     python3 - << 'SYSTEM_TESTS'

@@ -37,7 +37,6 @@ export const SELECTABLE_THEME_IDS = [
 const themePresetIdSet = new Set<string>(SELECTABLE_THEME_IDS)
 
 const themePresetCache = new Map<string, ThemePreset>()
-let themePresetEntriesCache: Array<[string, ThemePreset]> | null = null
 
 export function isValidPresetId(id: string | null | undefined): id is string {
   return typeof id === 'string' && themePresetIdSet.has(id)
@@ -62,18 +61,6 @@ function getResolvedThemePreset(resolvedPresetId: string): ThemePreset {
 
 export function getThemePreset(presetId?: string): ThemePreset {
   return getResolvedThemePreset(resolvePresetId(presetId))
-}
-
-export function getThemePresetEntries(): Array<[string, ThemePreset]> {
-  if (themePresetEntriesCache) {
-    return themePresetEntriesCache
-  }
-
-  themePresetEntriesCache = Array.from(themePresetIdSet, (presetId) => [
-    presetId,
-    getResolvedThemePreset(presetId)
-  ])
-  return themePresetEntriesCache
 }
 
 const fontKeyMap: Record<string, string> = {

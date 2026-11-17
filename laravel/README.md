@@ -63,8 +63,8 @@ Deploy as the dedicated account, with trusted Git host keys/repository access al
 
 ```bash
 bash laravel-deploy.sh --domain=example.com --repository=git@github.com:owner/project.git --health-url=http://127.0.0.1/up --dry-run
-bash laravel-deploy.sh --domain=example.com --repository=git@github.com:owner/project.git --health-url=http://127.0.0.1/up --php-version=8.3 --fpm-service=php8.3-fpm.service --approve-service-changes --yes
-bash laravel-deploy.sh --domain=example.com --rollback --fpm-service=php8.3-fpm.service --approve-service-changes --yes
+bash laravel-deploy.sh --domain=example.com --repository=git@github.com:owner/project.git --health-url=http://127.0.0.1/up --php-version=8.3 --yes
+bash laravel-deploy.sh --domain=example.com --rollback --yes
 ```
 
 ```
@@ -77,7 +77,11 @@ SITE_ROOT/
 
 A private lock prevents concurrent deployments. Each candidate is a fresh Git checkout pinned to the resolved branch commit, uses `composer install` with the committed lockfile and platform checks, and links persistent environment/storage. Git authentication never accepts fingerprints automatically. The actual npm `build` script is used when present; otherwise select `--build-script=ACTUAL_NAME` or explicitly `--frontend=none`. npm uses `ci`; pnpm/yarn require their corresponding lockfile, pinned packageManager and an already installed reviewed Corepack. Native Node/npm may not meet a modern project's engine requirements; provide a reviewed supported runtime where needed. Arbitrary extra build hooks are not supported. Dependency scripts are application code: deploy only trusted repositories/lockfiles.
 
-Available Artisan cache commands and production environment are validated before activation. The current symlink switches atomically, services reload only when selected/approved, then a bounded proxy-free loopback health request checks HTTP 200 with the configured domain Host header. Use an appropriate readiness route; health requests never follow redirects. Select the PHP version used by your application, FPM unit and queue mode consistently. `--queue=queue|horizon` uses the real Artisan restart/terminate command; `--queue-service` additionally starts an exact toolkit unit with scoped privilege. Queue lifecycle must be verified on the target server.
+The deployment prepares dependencies, production config and release-local Artisan caches while the current release serves requests. Configure a readiness route handled by Laravel that returns a small HTTP 200 response. The candidate handles that route through its own HTTP kernel before activation. After the atomic symlink switch, the same route is checked through the live loopback web server with the site domain as the Host header.
+
+For normal code releases, the bundled Nginx configuration resolves the real release path for PHP-FPM, so an FPM reload is optional. If you explicitly request FPM or queue maintenance, it runs only after the new release responds successfully, then health is checked again. Blade compiles on demand to avoid clearing shared compiled views during deployment. [Laravel deployment and health routes](https://laravel.com/docs/12.x/deployment)
+
+`--queue=queue|horizon` uses the Artisan restart/terminate command. `--queue-service` starts a selected toolkit unit with scoped privilege. Use compatible workers, an expand-and-contract migration strategy, and asset URLs that remain available to clients from the previous release. See [operations](docs/operations.md) for the production conditions tested.
 
 Post-activation failure restores the prior release and checks it again. Failed candidates are retained for inspection. `--recover` reconciles an interrupted activation receipt without overwriting unrelated changes. Retention defaults to five ready releases (minimum two), preserves active/previous releases, and deletes only unchanged receipt-owned releases. Failed/unowned/edited directories are retained. Rollback never changes shared storage, secrets or database schema. New release code/static assets are readable by the web server; environment/state/receipts remain private. `bootstrap/cache` is private (0700) and its generated PHP files are mode 0600 because compiled configuration can contain secrets. PHP-FPM and queue/scheduler processes therefore run as the deployment account.
 

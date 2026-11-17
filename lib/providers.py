@@ -95,10 +95,7 @@ def candidates(requested, info):
     if (
         requested == "python3"
         and family == "opensuse"
-        and (
-            info.get("id") in ("opensuse-tumbleweed", "opensuse-slowroll")
-            or str(info.get("version", "")).startswith("16")
-        )
+        and info.get("id") in ("opensuse-tumbleweed", "opensuse-slowroll")
     ):
         name = "python313"
     if (

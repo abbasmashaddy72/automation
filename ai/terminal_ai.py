@@ -19,7 +19,14 @@ def main(argv):
     parser.add_argument("--port", type=int)
     parser.add_argument("--shell", choices=("bash", "fish", "zsh"), default="bash")
     parser.add_argument("prompt", nargs="*")
-    args = parser.parse_args(argv)
+    # Parse flags and free text in either order on all supported Python versions.
+    # Keep text following -- literal, even when it resembles a toolkit flag.
+    if "--" in argv:
+        separator = argv.index("--")
+        args = parser.parse_intermixed_args(argv[:separator])
+        args.prompt.extend(argv[separator + 1 :])
+    else:
+        args = parser.parse_intermixed_args(argv)
     suggestion = args.action == "suggest"
     limit = 2048 if suggestion else 16384
     prompt = " ".join(args.prompt).strip()

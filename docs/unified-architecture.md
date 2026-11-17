@@ -1,5 +1,3 @@
-> **Historical reference (pre-v2.1):** For the current llama.cpp-only installation use [INSTALL-LLAMACPP-FIRST.md](../INSTALL-LLAMACPP-FIRST.md). Archived commands for Ollama/vLLM are not active in the upgraded toolkit.
-
 # Unified architecture
 
 `setup.sh` is the Bash entrypoint and dispatches Bash-only prerequisites before Python. It classifies read-only requests before any automatic dependency installation.
@@ -25,4 +23,4 @@
 
 Adapters use pacman, apt, dnf, zypper and apk independently. A common RPM database query does not make zypper interchangeable with dnf. Name matches never authorize substitutions.
 
-The entire `modules/legacy/` installer module is removed. The [ledger](legacy-migration.md) records maintained replacements and owner-approved retirement of host provisioning, standalone development services, Valet and native vLLM/Playground installation. Existing databases, services and AI stores are preserved. Bounded old-state importers remain maintained data parsers, not installer dispatchers. Shell wrappers under `lib/` use the shared implementation.
+The entire `modules/legacy/` installer module is removed. The [ledger](legacy-migration.md) records maintained replacements and owner-approved retirement of host provisioning, standalone development services, Valet and native vLLM/Playground installation. Existing databases, services and AI stores are preserved. Bounded old-state importers remain maintained data parsers, not installer dispatchers. Use the unified CLI for packages, configuration, Lerd and AI, and `scripts/update.sh` for toolkit recovery.

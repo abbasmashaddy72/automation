@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark, .dark *));
 
@@ -74,7 +74,9 @@
     }
   }
   @keyframes pulse-dot {
-    0%, 80%, 100% {
+    0%,
+    80%,
+    100% {
       opacity: 0.3;
       transform: scale(0.8);
     }
@@ -84,7 +86,8 @@
     }
   }
   @keyframes streaming-bounce {
-    0%, 100% {
+    0%,
+    100% {
       transform: translateY(0);
       opacity: 0.55;
     }
@@ -114,16 +117,14 @@
 
 :root {
   -webkit-tap-highlight-color: rgb(15 23 42 / 0.08);
-  --font-geist-sans: "Inter", "Inter", "Helvetica Neue", Arial,
-    sans-serif;
-  --font-geist-mono: "JetBrains Mono", "JetBrains Mono",
-    "SFMono-Regular", ui-monospace, monospace;
-  --font-editorial-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua",
-    Georgia, serif;
-  --theme-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-geist-sans: 'Inter', 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  --font-geist-mono: 'JetBrains Mono', 'JetBrains Mono', 'SFMono-Regular', ui-monospace, monospace;
+  --font-editorial-serif:
+    'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --theme-font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --theme-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --theme-font-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia,
-    serif;
+  --theme-font-serif:
+    'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
   --theme-font-display: var(--font-editorial-serif);
   --radius: 0.5rem;
   /* z-index scale */
@@ -404,10 +405,7 @@ a,
 input,
 select,
 textarea {
-  @apply border border-border bg-background text-foreground transition-colors
-    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60
-    focus-visible:ring-offset-2 focus-visible:ring-offset-background
-    disabled:cursor-not-allowed disabled:bg-muted/50 disabled:text-muted-foreground;
+  @apply border-border bg-background text-foreground focus-visible:ring-ring/60 focus-visible:ring-offset-background disabled:bg-muted/50 disabled:text-muted-foreground border transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed;
 }
 
 input:disabled,
@@ -424,9 +422,7 @@ textarea[data-slot='textarea']:disabled {
 }
 
 textarea[data-composer-textarea='true'] {
-  @apply border-0 bg-transparent shadow-none outline-none
-    focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0
-    disabled:border-0 disabled:bg-transparent;
+  @apply border-0 bg-transparent shadow-none outline-none focus-visible:border-0 focus-visible:ring-0 focus-visible:ring-offset-0 disabled:border-0 disabled:bg-transparent;
 }
 
 @layer base {
@@ -436,7 +432,7 @@ textarea[data-composer-textarea='true'] {
 
   table th,
   table td {
-    @apply border border-border p-3 text-left;
+    @apply border-border border p-3 text-left;
   }
 }
 
@@ -459,8 +455,8 @@ textarea[data-composer-textarea='true'] {
 }
 
 [data-slot='button'].transition-all {
-  transition-property: color, background-color, border-color,
-    text-decoration-color, fill, stroke, opacity, transform;
+  transition-property:
+    color, background-color, border-color, text-decoration-color, fill, stroke, opacity, transform;
 }
 
 [data-slot='sidebar-rail'].transition-all {
@@ -494,9 +490,18 @@ textarea[data-composer-textarea='true'] {
 }
 
 /* Local AI: consistent compact header, readable conversation width. */
-header select { font-size: 0.8rem; min-height: 2.2rem; }
-header button { flex-shrink: 0; }
+header select {
+  font-size: 0.8rem;
+  min-height: 2.2rem;
+}
+header button {
+  flex-shrink: 0;
+}
 @media (max-width: 650px) {
-  header .max-w-screen-2xl { gap: .5rem; }
-  header select { max-width: 8.5rem; }
+  header .max-w-screen-2xl {
+    gap: 0.5rem;
+  }
+  header select {
+    max-width: 8.5rem;
+  }
 }

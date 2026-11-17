@@ -1,5 +1,3 @@
-> **Historical reference (pre-v2.1):** For the current llama.cpp-only installation use [INSTALL-LLAMACPP-FIRST.md](../INSTALL-LLAMACPP-FIRST.md). Archived commands for Ollama/vLLM are not active in the upgraded toolkit.
-
 # Unified setup
 
 Run Bash scripts with `bash` from Bash, Fish or Zsh. Python 3.9+ is required after bootstrap.
@@ -18,7 +16,7 @@ bash setup.sh packages install --select REQUEST --replace REQUEST=EXACT_NATIVE -
 
 Direct installation automatically preflights Python; llama.cpp builds also preflight Git, CMake, Make, C++ and CA certificates. Lerd installation checks Podman on eligible systemd hosts. Optional Gum is never installed implicitly by wizard preflight. All sources must already be configured and verified by their native manager. Offline cache absence reports unavailable; it never justifies repository additions. No fuzzy replacement is installed automatically. Exit 5 means at least one selection is unavailable.
 
-In the wizard, use Space to check the categories you want and then press Enter. Choose **All categories** for a full catalog review. In the text wizard, enter category numbers or `all`. Choosing only **Browsers** checks only browser packages. The final review shows the package IDs and sources awaiting installation approval.
+For package search, recipe review and saved plans, see [Packages and prerequisites](packages.md). In the wizard, use Space to check the categories you want and then press Enter. Choose **All categories** for a full catalog review. In the text wizard, enter category numbers or `all`. Choosing only **Browsers** checks only browser packages. The final review shows the package IDs and sources awaiting installation approval.
 
 Open the graphical dashboard with `bash setup.sh dashboard open` or choose it from `bash setup.sh menu`. The dashboard opens on **System**, with operating system, hardware, storage and AI eligibility. In **Packages**, select from the searchable catalog or expand **Custom package** to look up configured sources. Choose **Next: preview selected packages** to review verified IDs and sources, then **Proceed with installation**. The package manager resolves dependencies at execution. Use **Previous** to revise the selection. Reinstall appears in the confirmation only for installed selections. **Download plan JSON** saves the resolved selections. The native replay workflow is `bash setup.sh packages restore PLAN.json --dry-run`; review the result before applying. Mixed-provider plans also record their sources and can be used as an inventory.
 
@@ -40,7 +38,7 @@ bash setup.sh packages install --select postman-bin --enable-aur --no-confirm
 
 Sudo authentication and Shelly's AUR prompts stay in the terminal. AUR installs using the toolkit flag require interactive terminal input. Shelly 3.2.1 uses its own `--no-confirm` to automatically accept ordinary recipe reviews and the final install transaction, so the toolkit leaves that flag off AUR helper commands. [Shelly AUR safety guide](https://www.seafoam-labs.org/shelly-alpm/docs/aur-safety/)
 
-**Configure** includes Zed telemetry status, disable and restore. Restore uses a private receipt for the two Zed telemetry keys. **Maintenance** includes diagnostics, inventory and toolkit cache cleanup. **Local AI** detects llama.cpp, Ollama and vLLM through local executables, process names and systemd units. The toolkit manages llama.cpp. Preview the managed install, select an existing GGUF path, and install or control its owned service from the dashboard. Use the CLI for custom storage, model downloads, or tuning. See [managed llama.cpp](../INSTALL-LLAMACPP-FIRST.md).
+**Configure** includes Zed telemetry status, disable and restore. Restore uses a private receipt for the two Zed telemetry keys. **Maintenance** includes diagnostics, inventory and toolkit cache cleanup. **Local AI** detects llama.cpp, Ollama and vLLM through local executables, process names and systemd units. The toolkit manages llama.cpp. Preview the managed install, select an existing GGUF path, and install or control its owned service from the dashboard. Use the CLI for custom storage, model downloads, or tuning. See [managed llama.cpp](llama-cpp.md).
 
 ### Local AI and Project Sites
 
@@ -58,7 +56,7 @@ Choose each development command, cleanup alias and Terminal AI command in **Conf
 
 Dashboard links retain the current tab across refresh and support browser Back and Forward. For example, `#configure/terminal/zsh` opens Zsh settings and `#ai/ai-model-setup/testing` opens model testing.
 
-With Terminal AI enabled and llama.cpp running, use `ai ask "How do I check port 8080?"` or `systemctl status automation-llamacpp | ai ask "Why is this failing?"`. Run `ai suggest "find large files in this directory"` to print one suggested command. In an interactive Bash, Fish or Zsh prompt, type a partial command or request and press **Ctrl+X**, then **Ctrl+A**. The suggestion fills the editable command line so you can review it before pressing Enter. Existing shortcut bindings take precedence. If another tool already uses `ai`, use `automation_ai`. Terminal AI sends your prompt or selected input to the local server without capturing terminal history.
+With Terminal AI enabled and llama.cpp running, use `ai ask "How do I check port 8080?"` or `systemctl status automation-llamacpp | ai ask "Why is this failing?"`. Run `ai suggest "find large files in this directory"` to print one suggested command. In an interactive Bash, Fish or Zsh prompt, type a partial command or request and press **Ctrl+X**, then **Ctrl+A**. The suggestion fills the editable command line so you can review it before pressing Enter. Existing shortcut bindings take precedence. If another tool already uses `ai`, use `automation_ai`. Terminal AI sends your prompt or selected input to the local server without capturing terminal history. In direct CLI calls, use `--` before prompt text that contains command flags.
 
 The service port is the HTTP listener on the inference host's loopback interface, normally `http://127.0.0.1:8080/v1`. Leave it blank to retain the installed port or use 8080 for a new service. **Check loopback port** distinguishes a free port, a healthy llama.cpp API and a port that cannot be bound or verified. The toolkit LAN gateway requires the backend port 8080. SSH checks run against the server's own loopback.
 
@@ -94,13 +92,13 @@ bash setup.sh desktop status
 
 Default settings come from `config/defaults.env`, overridden by a saved profile, `.env`, environment, then CLI. `.env` initialization merges missing keys without changing existing values and writes private permissions. Local defaults contain no credentials. Invalid/duplicate keys, command interpolation and symlink config paths are refused.
 
-Lerd, desktop favorites, AI commands and update examples are documented in the [README](../README.md), [llama.cpp guide](archlinux-llamacpp.md) and [migration guide](legacy-migration.md). Existing installed packages win over source preferences. Selecting Lerd suppresses standalone overlapping runtimes without stopping existing services. Inventory never grants automatic uninstall rights.
+Find related guides for [packages](packages.md), [llama.cpp](llama-cpp.md), and [migration](legacy-migration.md) from the [README](../README.md). Existing installed packages win over source preferences. Selecting Lerd suppresses standalone overlapping runtimes without stopping existing services. Inventory never grants automatic uninstall rights.
 
 The compatibility boundaries below distinguish package-test evidence from remaining real-host limitations.
 
 ## Observed distribution differences
 
-Tumbleweed currently packages the default Python runtime as `python313`; that release-specific mapping still requires an exact configured-repository check. Leap 15 retains its existing `python3` candidate. On Fedora/RHEL, an installed `curl-minimal` owning `/usr/bin/curl` is preserved using RPM ownership rather than forcing full-curl replacement.
+Tumbleweed currently packages the default Python runtime as `python313`; that release-specific mapping still requires an exact configured-repository check. Leap uses its native `python3` package. On Leap 16 this provides the unversioned runtime entrypoint needed by the toolkit. [Leap Python release notes](https://doc.opensuse.org/release-notes/x86_64/openSUSE/Leap/16.0/release-notes-leap-160_color_en.pdf) On Fedora/RHEL, an installed `curl-minimal` owning `/usr/bin/curl` is preserved using RPM ownership rather than forcing full-curl replacement.
 
 Fedora 40+ provides `wget2-wget` for the wget command. It has different FTP/WARC behavior. This toolkit does not silently choose it when `wget` is unavailable; an explicit selection is required:
 
@@ -113,6 +111,17 @@ References: [Fedora change](https://fedoraproject.org/wiki/Changes/Wget2asWget),
 ## Local configuration and services
 
 `developer git --name NAME --email EMAIL` edits only the current user's Git identity using Git's own parser. `developer shell --shell bash|zsh|fish` adds an idempotent managed PATH/function block, preserving existing aliases/functions and deduplicating PATH even when sourced repeatedly. `vbin TOOL ARGS...` executes the selected local vendor tool and preserves argument boundaries and its exit code; pint/sail/fixer/pest/phpunit shortcuts are added only when absent. `--banner fastfetch|neofetch` enables an already installed tool in interactive sessions only; the default is none. Apply with confirmation/`--yes`, preview with `--dry-run`, and use `developer restore BACKUP.json --yes` to restore a private backup while refusing subsequent user edits. Login shells and existing SSH keys are never changed implicitly.
+
+## Desktop favorites
+
+Use explicit application IDs from installed desktop entries. GNOME and KDE have maintained favorites adapters. Other session types may be recognized without supporting changes. Preview before applying and retain the reported backup ID to restore. Restore checks for later edits before updating favorites.
+
+```bash
+bash setup.sh desktop status
+bash setup.sh desktop plan --select firefox.desktop
+bash setup.sh desktop apply --select firefox.desktop --yes
+bash setup.sh desktop restore BACKUP.json --yes
+```
 
 ## SSH and old Git backups
 
@@ -203,7 +212,7 @@ The remaining 25 manual tasks retain stable IDs and private progress under the c
 Only llama.cpp inference is managed. Existing third-party services, their
 settings and model stores are preserved. Use the verified GGUF workflow below
 to copy compatible assets. For runtime installation and model switching, see
-[the dedicated server guide](../INSTALL-LLAMACPP-FIRST.md).
+[the dedicated server guide](llama-cpp.md).
 
 ### Complete GGUF bundles and old selection recovery
 
@@ -269,7 +278,7 @@ GPU inference or production services.
 
 ### Dashboard review and apply
 
-Open `bash setup.sh dashboard open`. The dashboard uses a fixed loopback port so selections, model paths and checkboxes are remembered by your browser. Use the **Advanced** tab for the current toolkit settings, explicit true or false overrides, a custom absolute Project Sites directory and JSON overrides. Empty values restore defaults. Saved changes print a private backup ID that can be restored in Advanced. Shell environment overrides remain authoritative and are marked in the preview.
+Open `bash setup.sh dashboard open`. The dashboard uses a fixed loopback port so selections, model paths and checkboxes are remembered by your browser. Under **Advanced → Review & apply**, see the selections from each workflow and follow the links to change them. **Toolkit settings** shows defaults and effective values, with an optional JSON editor. Preview and save a setting immediately or stage it for the setup plan. Use the private backup ID from the save output in **Restore settings**. Shell environment overrides remain authoritative.
 
 Choose packages and any Project Sites, Zed or llama.cpp steps you intend to apply. For native packages, use the reinstall checkbox to review a reinstall instead of an installation. **Review all changes** validates the selection and reports package IDs, sources, project directories and the configured AI model directory and port. **Apply all changes** runs configuration and project setup first, then packages, Zed and Local AI. The floating **Setup checklist** opens a right-side panel with observed checks, manual tasks, and operation status. The panel shows pending, running, completed and failed actions. An unsuccessful action stops the sequence. Retry remaining actions from the same page or refresh the review if the package plan changed.
 
@@ -287,10 +296,16 @@ Check a manual task in the setup drawer to mark it as completed. Uncheck it to r
 
 ### Dashboard sections
 
-**Home** links to the workflow pages and provides a read-only hardware check. In **Install**, select packages for review, then use **Preview selected packages** to resolve their exact sources. The confirmation offers **Reinstall selected packages** when the review includes installed packages. Reinstall resolves exact repository packages, verified native Shelly packages, an installed Flatpak's recorded remote, or an exact AUR recipe via an enabled helper. Helpers retain their normal recipe review. Alternative previews preserve other selections.
+**System** links to the workflow pages and provides a read-only hardware check. In **Packages**, expand **View selected IDs** to inspect the selection one ID per line, then use **Next: preview selected packages** to resolve the sources. The confirmation offers **Reinstall selected packages** when the review includes installed packages. Reinstall resolves exact repository packages, verified native Shelly packages, an installed Flatpak's recorded remote, or an exact AUR recipe via an enabled helper. Helpers retain their normal recipe review. Alternative previews preserve other selections.
 
-**Advanced** contains combined setup review, apply, Project Sites and the Zed defaults checkbox. The editor shows the toolkit defaults separately from effective values. **Configure → Zed settings** can merge missing values, override the keys in a JSONC input, or replace the settings object. Preview lists added, changed and removed key paths. The existing private backup and restore workflow preserves the original file bytes. The toolkit validates JSONC structure and common setting types. Zed owns the complete, version-specific settings schema.
+In **Advanced → Review & apply**, the Project Sites and Zed defaults checkboxes add those actions to the plan. Expand an individual step in the review to inspect its technical details. Canceling the apply confirmation preserves the reviewed plan. **Configure → Zed settings** can merge missing values, override the keys in a JSONC input, or replace the settings object. Preview lists added, changed and removed key paths. The existing private backup and restore workflow preserves the original file bytes. The toolkit validates JSONC structure and common setting types. Zed owns the complete, version-specific settings schema.
+
+To restore toolkit settings, paste the backup ID returned by a previous settings save into **Advanced → Restore settings**, then choose **Preview restore** and review the proposed changes. Zed settings and personal files have their own restore workflows.
 
 **Maintenance → System Cleanup** inspects package caches, orphan candidates and journal usage. The preview counts native candidates and estimates their bytes. Arch systems with `paccache` can remove older cached package versions while retaining three. Debian-family systems can remove obsolete archives with APT autoclean. Unused packages, temporary files and logs are review information. [paccache manual](https://man.archlinux.org/man/paccache.8)
 
 CPU is the default for new builds. GPU detection identifies a build candidate and real inference verifies the installed configuration. SSH requires an updated toolkit at the specified server path, an already trusted host key and an existing SSH key or agent. Install, download and change context from the SSH terminal to handle native prompts. Dashboard start, stop or restart of the remote toolkit-owned service requires suitable noninteractive sudo authorization there. [OpenSSH manual](https://man.openbsd.org/ssh)
+
+## Smart Backup
+
+See the [Smart Backup guide](smart-backup.md) for the Home preset, folder tree, exclusions and verification.

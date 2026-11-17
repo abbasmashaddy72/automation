@@ -200,9 +200,7 @@ export const selectCurrentChatId = (s: ChatState) => s.currentChatId
 export const selectChatList = (s: ChatState) => s.chatList
 export const selectIsChatHydrated = (s: ChatState) => s.isChatHydrated
 export const selectHydrate = (s: ChatState) => s.hydrate
-export const selectGetChatById = (s: ChatState) => s.getChatById
 export const selectGetMessagesForChat = (s: ChatState) => s.getMessagesForChat
-export const selectCommitConversation = (s: ChatState) => s.commitConversation
 export const selectOnChangeChat = (s: ChatState) => s.onChangeChat
 export const selectOnCreateChat = (s: ChatState) => s.onCreateChat
 export const selectOnCreateDefaultChat = (s: ChatState) => s.onCreateDefaultChat

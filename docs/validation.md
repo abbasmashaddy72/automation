@@ -2,7 +2,7 @@
 
 ## Full system testing workflow
 
-Use `scripts/container_workflows.py --allow-install --with-system-tests --with-lint --output=PRIVATE_DIRECTORY` to exercise native packages and run the full regression suite as an unprivileged fixture user. Fish/Zsh are installed only when their exact packages are available from enabled native repositories; unavailable shells are explicitly reported. Use `--system-tests-only` for focused regression reruns after fixture fixes, and `--jobs=1|2|3` to bound concurrent distro workloads (default two). The fixture switches numeric UID directly; it never changes deliberately expired image accounts or opens login sessions. Mocked systemd contracts explicitly simulate executable availability; an absent real manager remains unsupported. The shell regressions execute generated Bash/Fish/Zsh configuration twice, verify PATH deduplication and preserve argument boundaries for project-local tools. No interactive host shell is changed. A workflow passes only after observed container removal; an unknown engine response is a failure.
+Use `scripts/container_workflows.py --allow-install --with-system-tests --with-lint --output=PRIVATE_DIRECTORY` to exercise native packages and run the full regression suite as an unprivileged fixture user. Fish/Zsh are installed only when their exact packages are available from enabled native repositories; unavailable shells are explicitly reported. Use `--system-tests-only` for focused regression reruns after fixture fixes, and `--jobs=1|2|3` to bound concurrent distro workloads (default two). The disposable Arch layer upgrades with its repository refresh to avoid a partial upgrade. The disposable Tumbleweed test installs GNU awk before Git and Fish so Git retains its awk dependency. Full regressions install native rsync so Smart Backup copy tests run alongside ZIP tests. The fixture switches numeric UID directly; it never changes deliberately expired image accounts or opens login sessions. Mocked systemd contracts explicitly simulate executable availability; an absent real manager remains unsupported. The shell regressions execute generated Bash/Fish/Zsh configuration twice, verify PATH deduplication and preserve argument boundaries for project-local tools. No interactive host shell is changed. A workflow passes only after observed container removal; an unknown engine response is a failure.
 
 Live inference verification is separate from distro probes. Use
 `bash setup.sh ai server plan` for a read-only preview and
@@ -19,7 +19,48 @@ runroot = "/absolute/private/test-runroot"
 
 Pass `CONTAINERS_STORAGE_CONF=/absolute/private/storage.conf` only to the test commands. Never replace the user's global configuration or reset/prune their existing engine. A shared read-only image store can still contend on metadata locks; a separate image store is needed when that happens. Run heavy image pulls and backend tests sequentially. Verify all fixture containers, networks and volumes are removed. This isolation does not certify or repair an independently locked host engine.
 
+## 2026-11-17 distro and application verification
+
+All twelve images passed the read-only probe and the write-enabled native package and checklist workflows in disposable rootless Podman. The 517-test unprivileged suite ran on each image, including native rsync copies and ZIP backups.
+
+| Podman image        | Regression result     |
+| ------------------- | --------------------- |
+| Arch Linux          | 516 passed, 1 skipped |
+| CachyOS             | 516 passed, 1 skipped |
+| Manjaro             | 516 passed, 1 skipped |
+| Debian 13           | 515 passed, 2 skipped |
+| Ubuntu 24.04        | 515 passed, 2 skipped |
+| Fedora 42           | 515 passed, 2 skipped |
+| Rocky Linux 9       | 514 passed, 3 skipped |
+| RHEL UBI 9          | 515 passed, 2 skipped |
+| AlmaLinux 9         | 515 passed, 2 skipped |
+| openSUSE Tumbleweed | 515 passed, 2 skipped |
+| openSUSE Leap 16.0  | 515 passed, 2 skipped |
+| Alpine 3.22         | 514 passed, 3 skipped |
+
+Tool-dependent skips include native PHP, systemd-analyze and Fish on Rocky's enabled repositories. Debian also passed ShellCheck and shfmt. Leap 16 passed after its bootstrap switched to the unversioned Python package. Linux Mint and EndeavourOS passed distro-ID and package-adapter fixtures. Native Mint and EndeavourOS runs remain separate coverage. RHEL UBI tests exercise its public repositories.
+
+The default matrix selects Arch, Debian, Ubuntu, Fedora, Rocky Linux, openSUSE Tumbleweed and Alpine. Run the additional images explicitly with the isolated Podman storage described above.
+
+```bash
+bash setup.sh validate --mode containers --engine podman --require-containers --allow-pull \
+    --containers cachyos,manjaro,rhel-ubi,almalinux,leap --output /tmp/toolkit-derivatives/read-only
+python3 scripts/container_workflows.py --allow-install --allow-pull --with-system-tests \
+    --containers cachyos,manjaro,rhel-ubi,almalinux,leap --output /tmp/toolkit-derivatives/write
+```
+
+- **Advanced** passed Chromium checks for staging, cancellation, applying settings and Project Sites together, saving settings independently, restoring by backup ID, and mobile navigation.
+- **Laravel** passed with live Nginx and PHP-FPM in Ubuntu. HTTP checks returned 200 throughout candidate rejection, deployment and rollback. The sandbox verified teardown. [Laravel verification scope](../laravel/docs/verification.md)
+- **Smart Backup** passed Chromium checks at 390 px and 1366 px, including selection inheritance and creating a backup.
+- **ChatGPT Lite** passed lint, TypeScript checking, a production build and browser tests with a simulated model API. **Open WebUI** passed sign-in enforcement, protected endpoint checks, interrupted recovery and session persistence in a separate disposable sandbox.
+
+Receipts are in the validation state directory under `advanced-deploy-20261117` and `backup-docs-final-20261117`. GPU acceleration, physical external drives and live desktop settings need separate host tests.
+
 ## Dashboard verification
+
+On 2026-11-18, Chromium checked 24 dashboard routes at 320, 390, 768, and 1366 px for horizontal overflow. It verified backup ID and preview-button alignment, stacked mobile controls, shared tab spacing, and AI target and model tab navigation. It also ran both storage previews and verified that package IDs stayed on separate lines after preview, Back, and reload. Separate disposable browser runs exercised Advanced settings save and restore, combined settings and Project Sites, and Smart Backup copy and ZIP output. A fresh ChatGPT Lite build passed its browser preference and model selection checks against a test endpoint.
+
+The same 12 Podman images passed read-only probes, native package and checklist workflows, and unprivileged regressions. ShellCheck and shfmt passed in the Debian fixture. The results and recovered teardown checks are under `dashboard-layout-20261118` in the validation state directory.
 
 | Workflow                      | Verified scope                                                                                                                                                                                                                              | Remaining coverage                                                                                         |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -28,6 +69,7 @@ Pass `CONTAINERS_STORAGE_CONF=/absolute/private/storage.conf` only to the test c
 | Local AI                      | Chromium exercised the two-step installation, local GGUF scanning, port/API/context reads against a loopback fixture, and SSH failure recovery and remote scanning with an SSH fixture. Context rollback has automated regression coverage. | Managed service installation, live inference, live SSH provisioning and GPU verification on a target host. |
 | Zed                           | Chromium used the real CLI against a temporary JSONC file. It tested a loopback model API fixture, cancelled a remote-endpoint warning, validated replacement, rejected an invalid backup ID and restored the original bytes.               | Real Zed GUI and authenticated or remote provider connectivity.                                            |
 | Cleanup                       | Chromium exercised both previews. Native CachyOS package-cache inspection reported zero candidates; a separate temporary cache demonstrated selection of two obsolete archives.                                                             | Host cache deletion, dependency removal and log changes.                                                   |
+| Smart Backup                  | Chromium verified the layout at 390 px and 1366 px and created a disposable backup through the folder tree. Native regressions verify copy/ZIP contents, exclusions, and failure recovery.                                                  | Physical external-drive detection and backup to external filesystems.                                      |
 
 The isolated Debian 13 Podman workflow passed native package smoke, ShellCheck, shfmt, checklist automation and unprivileged regressions, and verified container teardown. Its receipt is in the validation state directory under `dashboard-redesign-debian/workflows.json`.
 

@@ -14,6 +14,7 @@ OPTIONS = (
     ("ChatGPT Lite status", ["chat-lite", "status"]),
     ("Preview cache cleanup", ["cleanup", "plan"]),
     ("Open graphical setup dashboard", ["dashboard", "open"]),
+    ("Smart Backup", ["smart-backup", "interactive"]),
 )
 
 

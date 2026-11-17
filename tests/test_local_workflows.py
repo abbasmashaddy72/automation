@@ -105,19 +105,33 @@ class LocalUserFlows(unittest.TestCase):
             port = str(server.server_port)
             try:
                 server.reply = b'data: {"choices":[{"delta":{"content":"Check the port."}}]}\n\ndata: [DONE]\n\n'
-                output = io.StringIO()
-                with (
-                    patch("sys.stdin", io.StringIO("Selected diagnostic")),
-                    contextlib.redirect_stdout(output),
-                ):
-                    self.assertEqual(
-                        terminal_ai.main(["ask", "--port", port, "--", "Why?"]), 0
-                    )
-                self.assertEqual(output.getvalue(), "Check the port.\n")
+                output = subprocess.run(
+                    [
+                        "bash",
+                        str(ROOT / "setup.sh"),
+                        "ai",
+                        "server",
+                        "ask",
+                        "--port",
+                        port,
+                        "--",
+                        "Why?",
+                        "--help",
+                        "--auto-prereqs",
+                        "--yes",
+                        "configure",
+                    ],
+                    input="Selected diagnostic",
+                    text=True,
+                    capture_output=True,
+                    timeout=15,
+                )
+                self.assertEqual(output.returncode, 0, output.stderr)
+                self.assertEqual(output.stdout, "Check the port.\n")
                 self.assertEqual(server.path, "/v1/chat/completions")
                 self.assertEqual(
                     server.received["messages"][1]["content"],
-                    "Why?\n\nSelected diagnostic",
+                    "Why? --help --auto-prereqs --yes configure\n\nSelected diagnostic",
                 )
                 server.reply = json.dumps(
                     {"choices": [{"message": {"content": "ls\necho injected"}}]}

@@ -41,13 +41,15 @@ export function ModelSelect(): React.JSX.Element {
     }
   }, [])
   useEffect(() => {
-    try {
-      const prior = localStorage.getItem('ai-lite-model') || ''
-      setModel(prior)
-      setWebSearch(localStorage.getItem('ai-lite-web-search') === 'on')
-    } catch {}
     const ctrl = new AbortController()
-    void refresh(ctrl.signal)
+    queueMicrotask(() => {
+      if (ctrl.signal.aborted) return
+      try {
+        setModel(localStorage.getItem('ai-lite-model') || '')
+        setWebSearch(localStorage.getItem('ai-lite-web-search') === 'on')
+      } catch {}
+      void refresh(ctrl.signal)
+    })
     return () => ctrl.abort()
   }, [refresh])
   return (

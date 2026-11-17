@@ -64,6 +64,11 @@ printf 'FRESH_PROVISION=yes\nREPEAT_PROVISION=yes\nNATIVE_NGINX_FPM_POSTGRES=yes
 printf 'LARAVEL_STAGE=framework-fixture\n'
 runuser -u deploy -- composer create-project --prefer-dist --no-install --no-scripts --no-interaction laravel/laravel /tmp/laravel-source 12.0.0
 runuser -u deploy -- sh -c 'cd /tmp/laravel-source && composer install --no-dev --no-scripts --no-interaction --prefer-dist'
+printf 'first' > /tmp/laravel-source/release-version.txt
+cat >> /tmp/laravel-source/routes/web.php << 'PHP'
+Route::get('/release-check', fn () => response(file_get_contents(base_path('release-version.txt'))));
+PHP
+chown deploy:deploy /tmp/laravel-source/release-version.txt /tmp/laravel-source/routes/web.php
 cat > /tmp/laravel-source/package.json << 'JSON'
 {"name":"deployment-fixture","version":"1.0.0","private":true,"scripts":{"production-build":"node -e \"require('fs').writeFileSync('public/built.txt','fixture')\""}}
 JSON
@@ -86,12 +91,56 @@ runuser -u deploy -- test -r /tmp/reviewed-migrations.json
 printf 'LARAVEL_STAGE=first-deployment\n'
 "${deploy[@]}"
 first="$(readlink /srv/laravel-fixture/current)"
-runuser -u deploy -- sh -c 'printf first-upload > /srv/laravel-fixture/shared/storage/app/public/upload.txt; cd /tmp/laravel-source; printf second > public/version.txt; git add .; git commit -qm second'
+python3 - << 'TRAFFIC' &
+import http.client
+import pathlib
+import time
+
+seen = set()
+while not pathlib.Path("/tmp/stop-release-traffic").exists():
+    connection = http.client.HTTPConnection("127.0.0.1", timeout=5)
+    try:
+        connection.request("GET", "/release-check", headers={"Host": "example.test"})
+        response = connection.getresponse()
+        body = response.read()
+        assert response.status == 200 and body in (b"first", b"second"), (response.status, body[:50])
+        seen.add(body)
+        pathlib.Path("/tmp/traffic-seen-" + body.decode()).touch()
+    finally:
+        connection.close()
+    time.sleep(0.03)
+assert seen == {b"first", b"second"}, seen
+TRAFFIC
+traffic_pid=$!
+wait_for_release_traffic() {
+    local release="$1"
+    for _ in {1..100}; do
+        kill -0 "$traffic_pid"
+        [[ -f "/tmp/traffic-seen-$release" ]] && return 0
+        sleep 0.05
+    done
+    return 1
+}
+wait_for_release_traffic first
+runuser -u deploy -- sh -c 'cd /tmp/laravel-source; sed -i "s@/up@/candidate-not-ready@" bootstrap/app.php; git add .; git commit -qm unhealthy'
+if "${deploy[@]}" > /tmp/unhealthy-candidate.log 2>&1; then
+    printf 'Unhealthy candidate activated unexpectedly\n' >&2
+    exit 1
+fi
+grep -F 'Candidate Laravel health route' /tmp/unhealthy-candidate.log
+[[ "$(readlink /srv/laravel-fixture/current)" == "$first" ]]
+printf 'FAILED_CANDIDATE_KEPT_ACTIVE=yes\n'
+runuser -u deploy -- sh -c 'printf first-upload > /srv/laravel-fixture/shared/storage/app/public/upload.txt; cd /tmp/laravel-source; printf second > release-version.txt; git checkout HEAD^ -- bootstrap/app.php; git add .; git commit -qm second'
 "${deploy[@]}"
 second="$(readlink /srv/laravel-fixture/current)"
 [[ "$first" != "$second" ]]
+wait_for_release_traffic second
 runuser -u deploy -- bash /opt/laravel-toolkit/laravel-deploy.sh --site-root /srv/laravel-fixture --rollback --fpm-service php8.3-fpm.service --approve-service-changes --yes
 [[ "$(readlink /srv/laravel-fixture/current)" == "$first" ]]
+curl --fail --silent --header 'Host: example.test' http://127.0.0.1/release-check | grep -qx first
+touch /tmp/stop-release-traffic
+wait "$traffic_pid"
+printf 'CONTINUOUS_RELEASE_HTTP=yes\n'
 grep -qx first-upload /srv/laravel-fixture/shared/storage/app/public/upload.txt
 [[ -f /srv/laravel-fixture/current/public/built.txt ]]
 printf 'REAL_LARAVEL_COMPOSER_NPM=yes\nATOMIC_RELEASES=yes\nDATABASE_MIGRATIONS=yes\nROLLBACK_HEALTH=yes\nSHARED_UPLOAD_PRESERVED=yes\nSYSTEMD_MANAGER=simulated-native-daemons\nACME_PUBLIC_ISSUANCE=unverified\n'

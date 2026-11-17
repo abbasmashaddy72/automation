@@ -362,10 +362,15 @@ class DeploymentContracts(unittest.TestCase):
             "Repository authentication",
             "Production Composer install",
             "Production Laravel configuration",
+            "Candidate Laravel health route",
         ):
             self.fail = failure
-            with self.assertRaises(ValueError):
+            with (
+                patch.object(deploy, "switch", wraps=deploy.switch) as switch,
+                self.assertRaises(ValueError),
+            ):
                 self.execute()
+            switch.assert_not_called()
             self.assertEqual(deploy.current(self.site), original)
 
     def test_node_build_failure_preserves_live_application(self):
@@ -388,8 +393,15 @@ class DeploymentContracts(unittest.TestCase):
             if deploy.current(self.site) != original:
                 raise ValueError("fixture unhealthy candidate")
 
-        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(ValueError):
-            deploy.deploy(self.args(), command=self.command, health_check=check)
+        with (
+            contextlib.redirect_stdout(io.StringIO()),
+            patch.object(deploy, "reload_services") as reload_services,
+            self.assertRaises(ValueError),
+        ):
+            deploy.deploy(
+                self.args(queue="queue"), command=self.command, health_check=check
+            )
+        reload_services.assert_not_called()
         self.assertEqual(deploy.current(self.site), original)
         self.assertFalse((self.site / ".automation-deploy.pending.json").exists())
 

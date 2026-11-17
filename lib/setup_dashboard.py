@@ -104,6 +104,35 @@ def preview_arguments(payload, *, aur_ready, execute=False):
         raise ValueError("Expected an action")
     if execute and payload.get("confirmed") is not True:
         raise ValueError("Confirm the change first")
+    if action == "backup-browse":
+        path = payload.get("path")
+        if execute or (
+            path is not None and (not isinstance(path, str) or len(path) > 4096)
+        ):
+            raise ValueError("Choose a directory to browse")
+        return (
+            ["smart-backup", "browse"]
+            + ([f"--path={path}"] if path is not None else [])
+            + (["--hidden"] if payload.get("hidden") is True else [])
+        )
+    if action == "backup-run":
+        spec = json.dumps(payload.get("spec"))
+        if len(spec) > 32768:
+            raise ValueError("Backup selection is too large")
+        if not execute:
+            return ["smart-backup", "plan", "--json", "--spec", spec]
+        revision = payload.get("revision")
+        if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{64}", revision):
+            raise ValueError("Preview the backup before creating it")
+        return [
+            "smart-backup",
+            "run",
+            "--spec",
+            spec,
+            "--expected-plan",
+            revision,
+            "--yes",
+        ]
     if action == "terminal-current":
         shell = payload.get("shell")
         if execute or shell not in ("bash", "fish", "zsh"):
@@ -824,7 +853,7 @@ def serve(root, entries, info, settings):
             if (
                 execute
                 and not state["terminal"]
-                and payload.get("action") != "checklist-mark"
+                and payload.get("action") not in ("checklist-mark", "backup-run")
                 and not payload["action"].startswith(("webui-", "chat-background-"))
             ):
                 return self.respond(
@@ -835,7 +864,12 @@ def serve(root, entries, info, settings):
             locked = execute or (
                 args[:2] != ["packages", "status"]
                 and payload["action"]
-                not in ("ai-eligibility", "ai-engines", "system-details")
+                not in (
+                    "ai-eligibility",
+                    "ai-engines",
+                    "system-details",
+                    "backup-browse",
+                )
             )
             if locked and not previews.acquire(blocking=False):
                 return self.respond(409, b"An operation is already running")
@@ -929,9 +963,11 @@ def serve(root, entries, info, settings):
                         connected = False
 
             message = (
-                "Dashboard client operation started."
+                "Dashboard local operation started."
                 if all(
-                    name.startswith(("webui-", "chat-background-")) for name, _ in steps
+                    name == "backup-run"
+                    or name.startswith(("webui-", "chat-background-"))
+                    for name, _ in steps
                 )
                 else "Dashboard operation started. Use this terminal for sudo authentication and AUR recipe review."
             )

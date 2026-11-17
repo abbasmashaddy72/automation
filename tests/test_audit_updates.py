@@ -175,13 +175,19 @@ class ReadOnlyTests(unittest.TestCase):
             )[0],
             "python313",
         )
-        self.assertEqual(
-            providers.candidates(
-                "python3",
-                {"family": "opensuse", "id": "opensuse-leap", "version": "15.6"},
-            )[0],
-            "python3",
-        )
+        for version in ("15.6", "16.0"):
+            with self.subTest(version=version):
+                self.assertEqual(
+                    providers.candidates(
+                        "python3",
+                        {
+                            "family": "opensuse",
+                            "id": "opensuse-leap",
+                            "version": version,
+                        },
+                    )[0],
+                    "python3",
+                )
 
     def test_installed_rpm_curl_minimal_is_preserved_by_observed_ownership(self):
         with (

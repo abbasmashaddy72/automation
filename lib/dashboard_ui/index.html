@@ -54,25 +54,87 @@
       </dialog>
       <section id="advanced-page" hidden>
         <h1>Advanced</h1>
-        <p>
-          Edit toolkit settings and preview the changes before applying them.
-        </p>
-        <div class="presets">
-          <button type="button" id="review-all">Review all changes</button>
-          <button type="button" id="apply-all" disabled>
-            Apply all changes
+        <div class="tool-tabs" aria-label="Advanced sections" role="group">
+          <button type="button" data-advanced-mode="review" aria-pressed="true">
+            Review &amp; apply
           </button>
-          <label
-            ><input type="checkbox" id="stage-projects" /> Set up Project
-            Sites</label
+          <button
+            type="button"
+            data-advanced-mode="settings"
+            aria-pressed="false"
           >
-          <label
-            ><input type="checkbox" id="stage-zed" /> Apply missing Zed
-            defaults</label
+            Toolkit settings
+          </button>
+          <button
+            type="button"
+            data-advanced-mode="restore"
+            aria-pressed="false"
           >
+            Restore settings
+          </button>
         </div>
-        <div id="advanced-fields" class="advanced-fields"></div>
-        <p id="advanced-status" role="status"></p>
+        <section class="tool advanced-panel" id="advanced-review">
+          <h2>Setup plan</h2>
+          <p>
+            Review selections from the other tabs before applying them together.
+          </p>
+          <ul id="advanced-queue" class="advanced-queue"></ul>
+          <div class="advanced-actions">
+            <label
+              ><input type="checkbox" id="stage-projects" /> Set up Project
+              Sites</label
+            >
+            <label
+              ><input type="checkbox" id="stage-zed" /> Apply missing Zed
+              defaults</label
+            >
+          </div>
+          <p id="advanced-plan-status" role="status"></p>
+          <div class="advanced-actions">
+            <button type="button" id="review-all">Review all changes</button>
+            <button type="button" id="apply-all" class="primary" disabled>
+              Apply reviewed changes
+            </button>
+          </div>
+        </section>
+        <section class="tool advanced-panel" id="advanced-settings" hidden>
+          <h2>Toolkit settings</h2>
+          <p>
+            Choose defaults for Project Sites and package sources. Preview your
+            changes before saving them or adding them to the setup plan.
+          </p>
+          <div id="advanced-fields" class="advanced-fields"></div>
+          <p id="advanced-status" role="status"></p>
+          <button type="button" id="advanced-retry" hidden>
+            Reload settings
+          </button>
+        </section>
+        <section class="tool advanced-panel" id="advanced-restore" hidden>
+          <h2>Restore toolkit settings</h2>
+          <p>
+            Use the backup ID from a previous toolkit settings save. For Zed or
+            personal files, use their own tools.
+          </p>
+          <div class="form-action-row">
+            <label class="model-path" for="advanced-backup-id"
+              >Configuration backup ID
+              <input
+                id="advanced-backup-id"
+                placeholder="config-…json"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </label>
+            <button type="button" id="advanced-preview-restore">
+              Preview restore
+            </button>
+          </div>
+          <p id="advanced-restore-status" role="status"></p>
+          <div class="advanced-actions">
+            <a href="#configure/zed">Zed settings</a>
+            <a href="#maintenance/smart-backup">Smart Backup</a>
+          </div>
+        </section>
       </section>
       <dialog id="decision">
         <form method="dialog">
@@ -203,7 +265,7 @@
             <p id="selection" aria-live="polite"></p>
             <details>
               <summary>View selected IDs</summary>
-              <p id="selected-ids"></p>
+              <ul id="selected-ids" class="package-ids"></ul>
             </details>
           </div>
         </section>
@@ -216,7 +278,7 @@
         <h1 id="tools-title"></h1>
         <div
           id="tool-tabs"
-          class="subtabs"
+          class="tool-tabs"
           role="group"
           aria-label="Section options"
         ></div>

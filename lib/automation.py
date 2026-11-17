@@ -666,64 +666,9 @@ def install_cmd(name, info):
     return native_install_cmd([mapped], info)
 
 
-def install_batch_cmd(packages, info):
-    names = [package_native_name(p, info["family"]) for p in packages]
-    if any(not x for x in names):
-        raise ValueError("No curated package mapping for one or more packages")
-    return native_install_cmd(names, info)
-
-
 def native_exact_available(name, info):
     """Verify explicit substitutions against enabled native repositories."""
     return providers.exact_available(name, info, runner=providers._run)
-
-
-def package_resolution(name, info, settings):
-    """Installed wins over preference. Never substitute unconfigured repositories."""
-    if name == "lerd":
-        return (
-            "installed"
-            if installed(name, info["family"])
-            else "available"
-            if available(name, info)
-            else "unavailable",
-            "lerd",
-        )
-    if name.startswith("ai-"):
-        return (
-            "installed"
-            if installed(name, info["family"])
-            else "available"
-            if available(name, info)
-            else "unavailable",
-            "ai",
-        )
-    if installed(name, info["family"]):
-        return ("installed", info.get("manager") or "native")
-    if info.get("desktop") and flatpak_installed(name):
-        return ("installed", "flatpak")
-    prefer_flatpak = settings.get("AUTOMATION_PREFER_FLATPAK", "false").lower() in TRUE
-    if prefer_flatpak and info.get("desktop") and flatpak_available(name):
-        return ("available", "flatpak")
-    if available(name, info):
-        if (
-            settings.get("AUTOMATION_PREFER_SHELLY", "false").lower() in TRUE
-            and info["family"] == "arch"
-            and shutil.which("shelly")
-            and name != "shelly"
-        ):
-            return ("available", "shelly-native")
-        return ("available", info["manager"])
-    if (
-        settings.get("AUTOMATION_ENABLE_AUR", "false").lower() in TRUE
-        and info["family"] == "arch"
-    ):
-        matches = sources.search_exact(name, info)
-        if matches:
-            return ("available", matches[0]["source"])
-    if info["family"] != "arch" and info.get("desktop") and flatpak_available(name):
-        return ("available", "flatpak")
-    return ("unavailable", "no-compatible-source")
 
 
 def gum_choose(*options):
@@ -2025,6 +1970,10 @@ def main(argv=None):
         return subprocess.run(
             ["bash", str(ROOT / "laravel" / ("laravel-" + argv[1] + ".sh")), *argv[2:]]
         ).returncode
+    if argv and argv[0] == "smart-backup":
+        import smart_backup
+
+        return smart_backup.main(argv[1:])
     if argv and argv[0] in ("configuration", "webui", "chat-lite"):
         if argv[0] == "configuration":
             import recipes
@@ -2246,6 +2195,7 @@ def main(argv=None):
             "laravel",
             "zed",
             "chat-lite",
+            "smart-backup",
             "cleanup",
             "system-cleanup",
             "telemetry",

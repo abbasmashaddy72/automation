@@ -77,7 +77,7 @@ The default is a small, quantized model suitable for a 4 GB card. Choosing a
 19 GB GGUF on this system is **not** recommended; disk size and runtime memory
 are separate. `--allow-oversized` explicitly accepts the download risk.
 
-## 3. Access from other LAN devices
+## Access from other LAN devices
 
 ```bash
 bash setup.sh ai server urls
@@ -114,7 +114,7 @@ your router. Browser-only clients should call your own authenticated backend;
 CORS preflight is deliberately disabled at the gateway to prevent leaking
 Bearer keys into browser code. Use HTTPS reverse proxy/VPN for untrusted links.
 
-## 4. Performance profiles and measurements
+## Performance profiles and measurements
 
 ```bash
 bash setup.sh ai server benchmark --repeats 3 --concurrency 2 \
@@ -134,13 +134,13 @@ never mistake streaming chunks for tokens. Optional concurrent-client tests
 measure request completion, not guaranteed per-request throughput. Status
 reports include NVIDIA VRAM use and temperature if the driver exposes them.
 
-## 5. Optional chat interfaces
+## Optional chat interfaces
 
-Use [ChatGPT Lite](chatgpt-lite/README.md) for a browser-local chat workspace,
-or the [rootless Open WebUI workflow](docs/configuration-and-webui.md#rootless-open-webui)
+Use [ChatGPT Lite](../chatgpt-lite/README.md) for a browser-local chat workspace,
+or the [rootless Open WebUI workflow](configuration-and-webui.md#rootless-open-webui)
 for authenticated accounts. Each is configured separately from the server.
 
-## 6. Troubleshooting, preservation and rollback
+## Troubleshooting, preservation and rollback
 
 ```bash
 sudo journalctl -u automation-llamacpp -n 150 --no-pager
@@ -162,10 +162,10 @@ bash setup.sh ai server plan
   and verify `/health` from the server before allowing LAN traffic.
 
 AI installation is opt-in. Existing third-party services and model stores
-are preserved. Optional clients: [ChatGPT Lite](chatgpt-lite/README.md) and
-[Open WebUI](docs/configuration-and-webui.md).
+are preserved. Optional clients: [ChatGPT Lite](../chatgpt-lite/README.md) and
+[Open WebUI](configuration-and-webui.md).
 
-## 7. Testing and limitations
+## Testing and limitations
 
 ```bash
 PYTHONPATH=ai:lib python3 -m unittest -q tests.test_llamacpp_server_v21

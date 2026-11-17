@@ -110,6 +110,7 @@ No new ZIP or standalone delivery report is generated for local refactoring.
 Existing checksummed archive tools and transactional recovery remain available:
 
 ```bash
+bash scripts/update.sh --full-check /absolute/existing-full.zip
 bash scripts/update.sh --check /absolute/existing-patch.zip
 bash scripts/update.sh --apply /absolute/existing-patch.zip
 bash scripts/update.sh --rollback

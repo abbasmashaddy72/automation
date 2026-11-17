@@ -40,10 +40,17 @@ class TestPrerequisiteEntrypoint(unittest.TestCase):
         for distro, family in [
             ("arch", "arch"),
             ("manjaro", "arch"),
+            ("cachyos", "arch"),
+            ("endeavouros", "arch"),
             ("ubuntu", "debian"),
+            ("debian", "debian"),
+            ("linuxmint", "debian"),
             ("fedora", "fedora"),
+            ("rhel", "rhel"),
             ("rocky", "rhel"),
+            ("almalinux", "rhel"),
             ("opensuse-tumbleweed", "opensuse"),
+            ("opensuse-leap", "opensuse"),
             ("alpine", "alpine"),
         ]:
             with self.subTest(distro=distro), tempfile.TemporaryDirectory() as td:

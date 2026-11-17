@@ -17,7 +17,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-IMAGES = {
+BASE_IMAGES = {
     "arch": ("docker.io/library/archlinux:base", "arch"),
     "ubuntu": ("docker.io/library/ubuntu:24.04", "debian"),
     "debian": ("docker.io/library/debian:13", "debian"),
@@ -25,6 +25,14 @@ IMAGES = {
     "rocky": ("docker.io/rockylinux/rockylinux:9", "rhel"),
     "opensuse": ("registry.opensuse.org/opensuse/tumbleweed:latest", "opensuse"),
     "alpine": ("docker.io/library/alpine:3.22", "alpine"),
+}
+IMAGES = {
+    **BASE_IMAGES,
+    "cachyos": ("docker.io/cachyos/cachyos:latest", "arch"),
+    "manjaro": ("docker.io/manjarolinux/base:latest", "arch"),
+    "rhel-ubi": ("registry.access.redhat.com/ubi9/ubi:latest", "rhel"),
+    "almalinux": ("docker.io/library/almalinux:9", "rhel"),
+    "leap": ("registry.opensuse.org/opensuse/leap:16.0", "opensuse"),
 }
 
 
@@ -269,7 +277,7 @@ def main(argv=None):
     p.add_argument("--engine", choices=("auto", "podman", "docker"), default="auto")
     p.add_argument(
         "--containers",
-        default=",".join(IMAGES),
+        default=",".join(BASE_IMAGES),
         help="comma-separated distro names from: " + ",".join(IMAGES),
     )
     p.add_argument(

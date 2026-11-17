@@ -133,10 +133,6 @@ def pending(*, directory="", session=None):
     return [name for name in started.get("packages", []) if name not in done]
 
 
-def _owned_path(directory=""):
-    return state_dir(directory) / "owned.json"
-
-
 def owned(*, directory=""):
     path = state_dir(directory, create=False) / "owned.json"
     if not path.exists():

@@ -156,7 +156,7 @@ package_name() {
         python3:arch) echo python ;;
         python3:opensuse)
             case "$ID:$VERSION_ID" in
-                opensuse-tumbleweed:* | opensuse-slowroll:* | opensuse-leap:16*) echo python313 ;;
+                opensuse-tumbleweed:* | opensuse-slowroll:*) echo python313 ;;
                 *) echo python3 ;;
             esac
             ;;

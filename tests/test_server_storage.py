@@ -1,6 +1,7 @@
 """Exercise storage selection and service start checks without touching disks."""
 
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -207,7 +208,7 @@ class ServerStorage(unittest.TestCase):
                 elif argv[0] == "install":
                     Path(argv[-1]).write_bytes(Path(argv[-2]).read_bytes())
                 elif argv[0] == "ln":
-                    Path(argv[-1]).hardlink_to(argv[-2])
+                    os.link(argv[-2], argv[-1])
                 elif argv[0] == "rm":
                     Path(argv[-1]).unlink()
 

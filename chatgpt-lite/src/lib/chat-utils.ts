@@ -100,10 +100,6 @@ export function isStreamingStatus(status: ChatStreamStatus | undefined): boolean
 
 export const preloadMarkdown = () => void import('@/components/markdown/markdown')
 
-export function findLastMessageIndex(messages: ChatMessage[], role: ChatMessage['role']): number {
-  return messages.findLastIndex((message) => message.role === role)
-}
-
 export function getTextFromParts(parts: ChatMessagePart[]): string {
   const endsWithWhitespace = (value: string) => /\s$/.test(value)
   const startsWithWhitespace = (value: string) => /^\s/.test(value)

@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import uuid
-from validate import IMAGES, ROOT, output_path
+from validate import BASE_IMAGES, IMAGES, ROOT, output_path
 
 
 def source_ignore(directory, names):
@@ -222,7 +222,11 @@ def main(argv=None):
         default=2,
         help="Maximum concurrent disposable distro workflows (default: 2)",
     )
-    parser.add_argument("--containers", default=",".join(IMAGES))
+    parser.add_argument(
+        "--containers",
+        default=",".join(BASE_IMAGES),
+        help="comma-separated distro names from: " + ",".join(IMAGES),
+    )
     args = parser.parse_args(argv)
     if args.system_tests_only:
         args.with_system_tests = True

@@ -1,4 +1,4 @@
-**AI ENGINE POLICY (v2.1):** Only `bash setup.sh ai server ...` (llama.cpp) may install or manage inference. Do not ship or invoke retired engine installers. See INSTALL-LLAMACPP-FIRST.md.
+**AI ENGINE POLICY (v2.1):** Only `bash setup.sh ai server ...` (llama.cpp) may install or manage inference. Do not ship or invoke retired engine installers. See docs/llama-cpp.md.
 
 # Automation Toolkit — Agent and Contributor Contract
 

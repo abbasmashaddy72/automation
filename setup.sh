@@ -22,9 +22,11 @@ if [[ "${1:-}" == prerequisites ]]; then
 fi
 
 AUTO_PREREQS=0
+AFTER_SEPARATOR=0
 FORWARD=()
 for arg in "$@"; do
-    if [[ "$arg" == --auto-prereqs ]]; then
+    if [[ "$arg" == -- ]]; then AFTER_SEPARATOR=1; fi
+    if ((AFTER_SEPARATOR == 0)) && [[ "$arg" == --auto-prereqs ]]; then
         AUTO_PREREQS=1
     else
         FORWARD+=("$arg")
@@ -37,6 +39,7 @@ python_ok() {
 readonly_request=0 mutation=0 wants_lerd=0
 for arg in "${FORWARD[@]}"; do
     case "$arg" in
+        --) break ;;
         --check | --status | --list-models | --test-api | --dry-run | --help | -h | doctor | check | status | service-status | list | models | model-search | model-files | cache-list | gguf-list | gguf-legacy-list | gguf-resolve | legacy-plan | plan | search | hardware) readonly_request=1 ;;
         --install | install | --repair | repair | --update | update | wizard | configure | model-select | gguf-download | gguf-legacy-import | gguf-select | gguf-remove | legacy-import | start | stop | restart | autostart | key-generate | key-use | key-import | key-rotate | key-revoke | model-download | model-remove | snapshot-import | snapshot-remove) mutation=1 ;;
     esac
@@ -60,6 +63,7 @@ if ((mutation || AUTO_PREREQS)) || ! python_ok; then
     opts+=(--without-ui) # Wizard never installs optional Gum implicitly.
     for item in "${FORWARD[@]}"; do
         case "$item" in
+            --) break ;;
             --yes | -y | --dry-run | --non-interactive) opts+=("$item") ;;
             --no-confirm)
                 case "${FORWARD[0]:-}:${FORWARD[1]:-}" in

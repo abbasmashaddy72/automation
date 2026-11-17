@@ -65,6 +65,35 @@ def health(url, domain, *, attempts=5):
     raise ValueError("Application health check failed")
 
 
+def candidate_health(command, release, php, url, domain):
+    """Exercise the app's health route before changing the live release pointer."""
+    parsed = validate_health_url(url)
+    request_url = urllib.parse.urlunsplit(
+        (parsed.scheme, domain, parsed.path or "/", parsed.query, "")
+    )
+    command(
+        [
+            php,
+            "-r",
+            r"""
+define("LARAVEL_START", microtime(true));
+require "vendor/autoload.php";
+$app = require "bootstrap/app.php";
+$kernel = $app->make(Illuminate\Contracts\Http\Kernel::class);
+$request = Illuminate\Http\Request::create(stream_get_contents(STDIN), "GET");
+$response = $kernel->handle($request);
+$content = $response->getContent();
+exit($response->getStatusCode() === 200 && is_string($content) && strlen($content) <= 65536 ? 0 : 1);
+""",
+        ],
+        cwd=release,
+        env=environment(),
+        data=request_url.encode(),
+        timeout=15,
+        label="Candidate Laravel health route",
+    )
+
+
 def shared_environment(root):
     path = p.private(root / "shared/.env")
     if path.stat().st_size > 1048576:
@@ -565,7 +594,9 @@ def deploy(args, *, command=p.run, health_check=health):
                 for entry in available.get("commands", [])
                 if isinstance(entry, dict) and isinstance(entry.get("name"), str)
             }
-            for name in ("config:cache", "route:cache", "event:cache", "view:cache"):
+            # Laravel view:cache clears the shared compiled-view directory.
+            # Leave Blade compilation to the release-pinned HTTP workers.
+            for name in ("config:cache", "route:cache", "event:cache"):
                 if name in commands:
                     command(
                         [php, "artisan", name, "--no-interaction"],
@@ -626,6 +657,7 @@ def deploy(args, *, command=p.run, health_check=health):
                     env=env,
                     label="Reviewed isolated migrations",
                 )
+            candidate_health(command, release, php, url, domain)
             marker = {
                 "schema": 1,
                 "release": target,
@@ -643,13 +675,18 @@ def deploy(args, *, command=p.run, health_check=health):
             raise ValueError("Service reload approval is required before activation")
         p.save(pending, {"schema": 1, "before": before, "after": target})
         switch(root, target, before)
+        services_touched = False
         try:
-            reload_services(args, root / "releases" / target)
             health_check(url, domain)
+            if args.fpm_service or args.queue != "none":
+                services_touched = True
+                reload_services(args, root / "releases" / target)
+                health_check(url, domain)
         except BaseException:
             switch(root, before, target)
             if before:
-                reload_services(args, root / "releases" / before)
+                if services_touched:
+                    reload_services(args, root / "releases" / before)
                 health_check(url, domain)
             pending.unlink()
             raise

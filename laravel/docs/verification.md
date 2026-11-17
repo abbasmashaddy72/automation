@@ -1,23 +1,30 @@
-# Verification scope
+# Laravel verification
 
-A clean independent rerun on 2026-11-03 passed all ten native markers and verified teardown, using only the exported Laravel folder without source overlays. Its receipt is `system-finalization-20261103/isolated/laravel/laravel-sandbox.json`. The real-systemd/public-ACME/SSH/firewall gates below remain separate.
+## 2026-11-18 native rerun
 
-Earlier native run (2026-11-02): **PASS** on rootless Ubuntu 24.04. All ten native markers passed: independent Ubuntu unit tests, fresh/repeated provisioning, real Nginx/FPM/PostgreSQL, configuration preservation, real Laravel/Composer/npm, atomic releases, migrations, rollback health and upload preservation. Exit 0; container teardown verified. The existing validation receipt is `portable-laravel-manifest-fix/laravel-sandbox.json`.
+The standalone rootless Ubuntu 24.04 fixture passed all 12 checks again. Continuous HTTP sampling through native Nginx and PHP-FPM passed through failed candidate verification, healthy activation and rollback. The fixture exited successfully and its container was removed. The recovered run evidence is under `dashboard-layout-20261118/resumed` in the toolkit validation state directory.
 
-During the package phase, the final deployment helper and regression-test file were refreshed from this standalone folder and independently SHA-256 checked before unit/deployment execution. No parent source or configuration was introduced. The current bundled runner exports those same final files directly on subsequent runs.
+## 2026-11-17 native results
 
-Offline verification is run entirely from this folder with `python3 scripts/validate.py`. The suite uses temporary Git repositories, application layouts and explicit command/HTTP fixtures. It covers configuration isolation and preservation, script-relative execution after copying, prerequisite approval, exact database selection, URL/checksum/redirect/private-address rejection, managed configuration rollback and interruption recovery, Git/Composer/build/configuration/migration failure, deployment locking, atomic activation, failed-health restoration, shared data, queue restart command selection, retention and explicit rollback. Contract fixtures do not prove real infrastructure behavior.
+The standalone toolkit passed all 12 checks on rootless Ubuntu 24.04. Continuous HTTP sampling through real Nginx and PHP-FPM returned 200 while the deployment rejected an unhealthy candidate before activation, switched to a healthy release and rolled back. The run also verified fresh and repeated provisioning, native PostgreSQL setup, preserved configuration and uploads, and Laravel migrations against a disposable SQLite application database. Container teardown passed.
 
-The independent native test command is:
+The receipt is `advanced-deploy-20261117/laravel-current/laravel-sandbox.json` under the toolkit validation state directory. The systemd adapter drives native daemons and simulates the systemd manager, including timer and autostart behavior.
+
+## Run the checks
+
+Run these commands from the standalone Laravel directory.
 
 ```bash
+python3 scripts/validate.py
 python3 scripts/podman_test.py --allow-install --allow-pull --output="$HOME/.local/state/portable-laravel-tests"
 ```
 
-The runner exports only this folder, excluding private `.env`, keys and caches; no parent repository is mounted or imported. It verifies rootless Podman and removes its nonce-labelled container on success or failure. Fixture native packages and official Laravel dependency downloads require explicit opt-in. The JSON receipt records each native marker and teardown. Failed runs remain in the existing validation directories. They exposed a test-systemctl binary overwritten by package installation (fixed with a container-only dpkg diversion), and a real production configuration probe missing Composer autoload (fixed in deployment, with a native PHP regression), and a fixture migration manifest that was unreadable by the deployment user (fixed with private deployment-user ownership and an explicit readability assertion). No production implementation bypass was introduced.
+The offline suite uses temporary Git repositories and command or HTTP fixtures. It checks configuration and approval boundaries, prerequisites, repository and URL validation, release locks, candidate failures, activation, rollback, recovery and retention. The host run discovers 31 Laravel tests. Its native PHP check is skipped when only the host Lerd wrapper is available, and the Ubuntu fixture exercises it with native PHP.
 
-Native runs exercise fresh/repeated Ubuntu 24.04 provisioning, preserved Nginx configuration, real Nginx/PHP-FPM/PostgreSQL daemons, a temporary named PostgreSQL database, actual Laravel/Composer/npm, reviewed migrations against a disposable SQLite application database, two release activations, health checks, rollback and preserved uploads. The test systemctl adapter drives real daemons but simulates the systemd manager, timer and autostart behavior. Check the latest JSON result rather than treating this scope description as a pass claim.
+The native runner exports only this folder, excludes private configuration, keys and caches, and mounts the export read-only. Packages, Laravel dependencies and fixture data are installed inside the disposable layer. The runner verifies rootless Podman and confirms container removal.
 
-Remaining independent gates: Ubuntu 22.04/26.04 and arm64 native runs; real systemd boot/timers and queue lifecycle; public ACME/DNS/renewal; SSH/firewall hardening and administrator access; real remote Git hosting credentials; an arbitrary administrator-owned HTTPS provisioner; production workload/performance; multiple application PHP/Node/version combinations. Offline tests enforce URL verification and execution approval boundaries; no unreviewed public provisioning script is executed. The fixture uses a tiny declared Node build task, not a claim of compatibility with every project's Vite or package engine requirements. Ubuntu native Node/npm versions may not meet newer frontend requirements: arrange a reviewed supported runtime before deploying that application; build failures preserve the current release.
+## Earlier runs and remaining coverage
 
-On the contributor host, 31 Laravel tests are discovered: 30 pass and the native-PHP probe is skipped because `php` is a Lerd wrapper, which is deliberately not invoked against temporary system directories. The Ubuntu fixture runs that probe with real native PHP as well. Host ShellCheck and shfmt are skipped when absent. Do not install host packages just to obtain a test pass. A successful native container run is evidence for the stated workflow, not unrestricted production certification. Use a disposable staging VM with backups and appropriate secrets/host-trust procedures before adopting a real server.
+Native Ubuntu 24.04 runs on 2026-11-02 and 2026-11-03 passed the earlier ten-marker suite and confirmed teardown. Their receipts are `portable-laravel-manifest-fix/laravel-sandbox.json` and `system-finalization-20261103/isolated/laravel/laravel-sandbox.json`.
+
+Separate gates cover native Ubuntu 22.04 and 26.04, arm64, real systemd boot and timers, queue service lifecycle, public ACME/DNS, administrator SSH and firewall changes, real remote Git credentials and production load. The fixture uses a small declared Node build task. Application-specific PHP, Node and frontend requirements depend on the deployed project.

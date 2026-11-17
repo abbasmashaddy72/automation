@@ -30,10 +30,13 @@ class DistroMatrix(unittest.TestCase):
     CASES = [
         ("arch", "arch", "pacman"),
         ("cachyos", "arch", "pacman"),
+        ("endeavouros", "arch", "pacman"),
+        ("manjaro", "arch", "pacman"),
         ("ubuntu", "debian", "apt-get"),
         ("debian", "debian", "apt-get"),
         ("linuxmint", "debian", "apt-get"),
         ("fedora", "fedora", "dnf"),
+        ("rhel", "rhel", "dnf"),
         ("rocky", "rhel", "dnf"),
         ("almalinux", "rhel", "dnf"),
         ("opensuse-tumbleweed", "opensuse", "zypper"),
