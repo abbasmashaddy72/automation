@@ -1,7 +1,5 @@
 """Package execution regression contracts; no host package mutation."""
 
-import json
-import os
 from pathlib import Path
 import sys
 import tempfile
@@ -11,7 +9,6 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "lib"))
 import automation as a
-import catalog
 import journal
 
 
@@ -183,13 +180,6 @@ class OwnedInstallContracts(unittest.TestCase):
 class SafetyContracts(unittest.TestCase):
     def test_read_only_plans_do_not_create_journal(self):
         with tempfile.TemporaryDirectory() as tmp:
-            info = {
-                "family": "debian",
-                "manager": "apt-get",
-                "desktop": False,
-                "id": "debian",
-                "version": "12",
-            }
             with (
                 patch.object(a, "installed", return_value=False),
                 patch.object(a, "available", return_value=True),

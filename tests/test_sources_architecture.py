@@ -3,9 +3,7 @@
 from __future__ import annotations
 import contextlib
 import io
-import os
 from pathlib import Path
-import subprocess
 import sys
 import tempfile
 import time

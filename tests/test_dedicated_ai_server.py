@@ -3,11 +3,9 @@
 from __future__ import annotations
 from argparse import Namespace
 import contextlib
-import importlib
 import io
 import json
 from pathlib import Path
-import socket
 import sys
 import tempfile
 import threading
@@ -158,6 +156,9 @@ class SafetyTests(unittest.TestCase):
                     "",
                     "",
                 ],
+            ),
+            patch.object(
+                srv, "api_key_status", return_value={"state": "not-configured"}
             ),
             patch.object(srv, "lan", return_value=None),
             patch.object(srv, "BIN") as binary,

@@ -6,7 +6,6 @@ import io
 import json
 import os
 from pathlib import Path
-import socket
 import sys
 import tempfile
 import unittest
@@ -14,27 +13,12 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "lib"), str(ROOT / "ai")]
-import resources
 import automation
 import desktop
 import panels
 
 
 class ResourcePlanning(unittest.TestCase):
-    def args(self, **kwargs):
-        return Namespace(
-            **{
-                "backend": "llamacpp",
-                "action": "configure",
-                "host": "127.0.0.1",
-                "cpu_threads": None,
-                "cpu_quota": None,
-                "port": None,
-                "context": None,
-                **kwargs,
-            }
-        )
-
     def test_auto_settings_validate_and_are_profile_safe(self):
         value = {
             key: "auto"
@@ -47,62 +31,6 @@ class ResourcePlanning(unittest.TestCase):
         self.assertEqual(automation.validate_settings(value), value)
         with self.assertRaises(ValueError):
             automation.validate_settings({"AUTOMATION_AI_THREADS": "auto;command"})
-
-    def test_cpu_memory_budget_and_port_are_resolved_without_gpu_claims(self):
-        args = self.args()
-        with (
-            patch("resources.settings", return_value={}),
-            patch("resources.ai_health.hardware", return_value={}),
-            patch("resources.budget", return_value=(8, 512)),
-            patch("resources.free_port", return_value=18091),
-        ):
-            result = resources.apply(args)
-        self.assertEqual(
-            (args.cpu_threads, args.cpu_quota, args.port), (2, "200%", 18091)
-        )
-        self.assertIn("not inferred", result["acceleration"])
-
-    def test_explicit_and_stored_overrides_are_preserved(self):
-        args = self.args(cpu_threads=3, cpu_quota="150%", port=19000)
-        with (
-            patch("resources.settings", return_value={}),
-            patch("resources.ai_health.hardware") as hardware,
-        ):
-            resources.apply(args)
-            hardware.assert_not_called()
-        self.assertEqual(
-            (args.cpu_threads, args.cpu_quota, args.port), (3, "150%", 19000)
-        )
-        args = self.args()
-        with (
-            patch("resources.settings", return_value={}),
-            patch("resources.ai_health.hardware") as hardware,
-        ):
-            resources.apply(args, {"threads": 2, "cpu_quota": 175, "port": 19001})
-            hardware.assert_not_called()
-        self.assertEqual(
-            (args.cpu_threads, args.cpu_quota, args.port), (2, "175%", 19001)
-        )
-
-    def test_fractional_cgroup_quota_and_zero_memory_are_not_treated_as_unlimited(self):
-        args = self.args()
-        with (
-            patch("resources.settings", return_value={}),
-            patch("resources.ai_health.hardware", return_value={}),
-            patch("resources.budget", return_value=(0.5, 0)),
-            patch("resources.free_port", return_value=19001),
-        ):
-            resources.apply(args)
-        self.assertEqual((args.cpu_threads, args.cpu_quota), (1, "50%"))
-
-    def test_occupied_port_is_skipped_without_terminating_its_owner(self):
-        with socket.socket() as occupied:
-            occupied.bind(("127.0.0.1", 0))
-            port = occupied.getsockname()[1]
-            with patch.dict(resources.ai_health.DEFAULT_PORTS, {"llamacpp": port}):
-                selected = resources.free_port("llamacpp")
-            self.assertNotEqual(selected, port)
-            self.assertEqual(occupied.getsockname()[1], port)
 
 
 class CinnamonPanel(unittest.TestCase):

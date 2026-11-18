@@ -24,7 +24,14 @@ ROUTES = {
 }
 MAX_BODY = 1024 * 1024
 UPSTREAM = "http://127.0.0.1:8080"
-OPENER = request.build_opener(request.ProxyHandler({}))
+
+
+class NoRedirect(request.HTTPRedirectHandler):
+    def redirect_request(self, *args):
+        return None
+
+
+OPENER = request.build_opener(request.ProxyHandler({}), NoRedirect())
 
 
 def handler_factory(key, subnet, upstream=UPSTREAM, capacity=4):
@@ -201,14 +208,22 @@ def main(argv=None):
     key = a.key_file.read_bytes().strip()
     if len(key) < 32:
         p.error("Key too short")
-    server = BoundedHTTPServer((str(addr), a.port), handler_factory(key, net))
-    server.daemon_threads = True
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
+    with (
+        BoundedHTTPServer((str(addr), a.port), handler_factory(key, net)) as server,
+        BoundedHTTPServer(
+            ("127.0.0.1", a.port),
+            handler_factory(key, ip_network("127.0.0.1/32")),
+        ) as local,
+    ):
+        worker = threading.Thread(target=local.serve_forever, daemon=True)
+        worker.start()
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            local.shutdown()
+            worker.join()
     return 0
 
 

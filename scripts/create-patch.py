@@ -10,7 +10,6 @@ import subprocess
 import argparse
 import tempfile
 from pathlib import Path
-import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]

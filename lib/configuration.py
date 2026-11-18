@@ -62,21 +62,16 @@ EDITABLE = {
 }
 
 
-def edit(root, changes, parse, validate, *, apply=False, state=""):
+def prepare(root, changes, parse, validate, *, fields=EDITABLE):
     import filesystem
-    import journal
-    import uuid
-    import workflows
 
     target = filesystem.checked(root / ".env")
-    if not isinstance(changes, dict) or not changes or set(changes) - EDITABLE.keys():
+    if not isinstance(changes, dict) or not changes or set(changes) - set(fields):
         raise ValueError("Choose supported configuration fields")
+    old = filesystem.read_regular(target, missing=True, limit=65536)
     current = parse(target)
-    old = target.read_bytes() if target.exists() else b""
-    if target.exists() and (
-        target.stat().st_uid != os.getuid() or target.stat().st_nlink != 1
-    ):
-        raise ValueError("Configuration must be privately owned")
+    if filesystem.read_regular(target, missing=True, limit=65536) != old:
+        raise ValueError("Configuration changed during review")
     for key, value in changes.items():
         if value is None:
             continue
@@ -89,13 +84,18 @@ def edit(root, changes, parse, validate, *, apply=False, state=""):
             or any(token in value for token in ("${", "$(", "`"))
         ):
             raise ValueError(f"Invalid literal value for {key}")
-        if key != "AUTOMATION_PROJECT_SITES_DIR" and value not in ("true", "false"):
+        if (
+            key in EDITABLE
+            and key != "AUTOMATION_PROJECT_SITES_DIR"
+            and value not in ("true", "false")
+            and fields is EDITABLE
+        ):
             raise ValueError(f"{key} requires true, false, or null for default")
     import re
 
     seen = set()
     result = []
-    for line in old.decode().splitlines(keepends=True):
+    for line in (old or b"").decode().splitlines(keepends=True):
         match = re.match(r"^\s*([A-Z_]+)=", line)
         key = match[1] if match else None
         if key in changes:
@@ -113,34 +113,56 @@ def edit(root, changes, parse, validate, *, apply=False, state=""):
     if remaining and updated and not updated.endswith("\n"):
         updated += "\n"
     new = (updated + "".join(remaining)).encode()
+    if len(new) > 65536:
+        raise ValueError("Updated configuration exceeds 64 KiB")
     defaults = parse(root / "config/defaults.env")
     merged = {**defaults, **current}
     for key, value in changes.items():
-        merged[key] = defaults.get(key, "") if value is None else value
+        if value is not None:
+            merged[key] = value
+        elif key in defaults:
+            merged[key] = defaults[key]
+        else:
+            merged.pop(key, None)
     validate(merged)
     preview = {
         key: {
             "before": current.get(key),
             "after": value,
-            "effective": os.environ.get(key, merged[key]),
+            "effective": os.environ.get(key, merged.get(key, "")),
             "environment_override": key in os.environ,
         }
         for key, value in changes.items()
     }
-    if apply and old != new:
-        folder = journal.state_dir(state)
-        backup = folder / f"config-{uuid.uuid4().hex}.json"
-        workflows.write_json(
-            backup,
-            {
-                "target": str(target),
-                "before": {key: current.get(key) for key in changes},
-                "expected": changes,
-            },
-            private=True,
-        )
-        if (target.read_bytes() if target.exists() else b"") != old:
+    return target, old, new, preview
+
+
+def record(state, target, preview):
+    import journal
+    import uuid
+    import workflows
+
+    backup = journal.state_dir(state) / f"config-{uuid.uuid4().hex}.json"
+    workflows.write_json(
+        backup,
+        {
+            "target": str(target),
+            "before": {key: value["before"] for key, value in preview.items()},
+            "expected": {key: value["after"] for key, value in preview.items()},
+        },
+        private=True,
+    )
+    return backup.name
+
+
+def edit(root, changes, parse, validate, *, apply=False, state="", fields=EDITABLE):
+    import filesystem
+
+    target, old, new, preview = prepare(root, changes, parse, validate, fields=fields)
+    if apply and (old or b"") != new:
+        backup = record(state, target, preview)
+        if filesystem.read_regular(target, missing=True, limit=65536) != old:
             raise ValueError("Configuration changed during review")
         filesystem.atomic(target, new)
-        preview["backup"] = backup.name
+        preview["backup"] = backup
     return preview

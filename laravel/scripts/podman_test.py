@@ -138,6 +138,8 @@ def main(argv=None):
                 if line.startswith(
                     (
                         "LARAVEL_STAGE=",
+                        "LARAVEL_FAILURE_LINE=",
+                        "LARAVEL_TRAFFIC_FAILURE=",
                         "Provisioning error:",
                         "Deployment error:",
                         "Laravel error:",

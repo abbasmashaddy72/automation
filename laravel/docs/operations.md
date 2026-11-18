@@ -36,6 +36,8 @@ The toolkit does not configure Git hosting accounts, manage production secrets, 
 
 ## Deploy while serving traffic
 
+The live probe retries failed responses. A truncated HTTP 200 fails health verification when the body is shorter than the server's declared length.
+
 Configure `--health-url` with an explicitly selected Laravel readiness route on literal loopback. The route must respond with HTTP 200 from the candidate kernel and from the live Nginx/FPM stack after activation. Include readiness checks for dependencies that the application must use to answer traffic. The kernel check runs with PHP CLI, while the post-switch checks exercise the HTTP listener. Use the bundled Nginx release-path configuration or its equivalent on a separately provisioned server. Routine PHP code activation uses the atomic symlink and needs no FPM reload. Keep old versioned assets available to clients that loaded HTML from prior releases.
 
 During a failed candidate check, the old release stays active. An activation failure restores and checks the previous release. Keep configuration, database schema, session/storage data, and queue payloads compatible across both versions. Operational requirements such as incompatible migrations or a non-graceful external service restart need a separate maintenance procedure.

@@ -5,6 +5,7 @@ on:
       - "**/*.py"
       - "**/*.sh"
       - "config/**"
+      - "lib/dashboard_ui/**"
       - ".github/workflows/validation.yml"
   pull_request:
   workflow_dispatch:
@@ -32,6 +33,13 @@ jobs:
           name: validation-offline
           path: ${{ runner.temp }}/toolkit-validation/
           if-no-files-found: warn
+  dashboard-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise the isolated dashboard in Chrome
+        run: python3 scripts/dashboard_browser_test.py
   distro-probes:
     if: github.event_name == 'workflow_dispatch' && inputs.container_matrix == true
     runs-on: ubuntu-latest

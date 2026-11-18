@@ -9,7 +9,6 @@ import pwd
 import re
 import shutil
 import subprocess
-import time
 from . import common as p
 
 SUPPORTED = {"22.04": "jammy", "24.04": "noble", "26.04": "resolute"}

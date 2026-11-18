@@ -596,7 +596,7 @@ def native_install_cmd(names, info, *, reinstall=False):
             "opensuse": ["zypper", "--non-interactive", "install", "--force"],
             "alpine": ["apk", "fix"],
         }
-    return [*prefix, *commands[family], *names]
+    return [*prefix, *commands[family], *dict.fromkeys(names)]
 
 
 def native_installed_name(name, info):
@@ -669,6 +669,12 @@ def install_cmd(name, info):
 def native_exact_available(name, info):
     """Verify explicit substitutions against enabled native repositories."""
     return providers.exact_available(name, info, runner=providers._run)
+
+
+def native_reinstall_available(name, info):
+    if info.get("family") in ("fedora", "rhel"):
+        return providers.rpm_reinstall_available(name)
+    return native_exact_available(name, info)
 
 
 def gum_choose(*options):
@@ -1495,7 +1501,7 @@ def packages_action(args, info, settings):
             reinstallable = False
             if state == "installed":
                 if source in (info["manager"], "shelly-native"):
-                    reinstallable = native_exact_available(actual, info)
+                    reinstallable = native_reinstall_available(actual, info)
                 elif source == "flatpak":
                     installation = flatpak_installation(name)
                     if installation:
@@ -1697,11 +1703,12 @@ def packages_action(args, info, settings):
         )
         return 4
     if not args.dry_run:
+        verify_source = native_reinstall_available if repair else native_exact_available
         for row in missing:
             if row["source"] in (
                 info["manager"],
                 "shelly-native",
-            ) and not native_exact_available(row["actual"], info):
+            ) and not verify_source(row["actual"], info):
                 print(
                     "Package no longer verified in configured native repositories:",
                     row["actual"],
@@ -2511,12 +2518,20 @@ def main(argv=None):
             settings,
         )
     if args.command == "dashboard":
-        if args.action == "open" and not args.value:
+        if args.action == "open":
             import setup_dashboard
 
-            return setup_dashboard.serve(ROOT, package_catalog(info), info, settings)
+            if args.value is None:
+                return setup_dashboard.serve(
+                    ROOT, package_catalog(info), info, settings
+                )
+            if not re.fullmatch(r"[0-9]{1,5}", args.value) or int(args.value) > 65535:
+                p.error("dashboard open accepts a port from 0 to 65535")
+            return setup_dashboard.serve(
+                ROOT, package_catalog(info), info, settings, port=int(args.value)
+            )
         if args.action != "export" or not args.value:
-            p.error("dashboard open | dashboard export REPORT.html")
+            p.error("dashboard open [PORT] | dashboard export REPORT.html")
         print(
             "Created read-only local HTML report:",
             workflows.export_dashboard(
@@ -2688,6 +2703,11 @@ def main(argv=None):
                         validate_settings,
                         apply=not args.dry_run,
                         state=settings.get("AUTOMATION_STATE_DIR", ""),
+                        fields=(
+                            configuration.EDITABLE.keys() | workflows.PROFILE_KEYS
+                            if args.action == "restore"
+                            else configuration.EDITABLE
+                        ),
                     )
                 )
             )

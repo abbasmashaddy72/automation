@@ -1,8 +1,29 @@
-# Portable workflows (offline-tested, host installation unverified)
+# Profiles, offline workflows, and recovery
 
 These features extend Validation. **Nothing in the workflows below installs packages, changes a repository, or removes existing Lerd databases/models.** Package installation still requires the existing explicit approval/`--yes` and exact repository checks.
 
-## Setup profiles
+## System profile backup and import
+
+Open **System → Export Profile** in the dashboard. Keep all sections selected for a full setup profile, or choose only the sections to transfer.
+
+| Section  | Included preferences                                                                                                           |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Toolkit  | Explicit package and AI defaults from the toolkit’s `.env`, including the Project Sites path                                   |
+| Setup    | Dashboard package selections, Project Sites and Zed review choices, model paths, inference build, ports, and SSH host and user |
+| Mappings | Confirmed native package aliases grouped by distribution, architecture, and package manager                                    |
+| Zed      | Supported editor preferences, telemetry booleans, and a credential-free llama.cpp API URL                                      |
+
+Under **System → Import Profile**, choose a UTF-8 profile JSON file up to 512 KiB. The dashboard checks JSON syntax and profile settings before enabling **Open profile**. Use **Edit JSON** to correct a readable file that fails validation. The editor indents validated JSON, and **Format JSON** checks your edits before reformatting. Expand each section in the review to inspect its values before applying. Edit fields or remove a section in the JSON editor to keep that part of the current setup. **Apply profile** saves package selections and dashboard choices, merges toolkit and Zed settings, and restores aliases. Existing fields outside the imported scope are preserved. Mappings from another platform stay inactive until used on their matching platform. Package installation and inference service changes still go through their regular reviews.
+
+The JSON records an application version and configuration schema. The dashboard migrates schema 1 CLI profiles, including compatible package selections. It migrates the retired Local AI shell preference, directs you to **Configure → Terminal**, and preserves any other supported settings in the same profile. Other unsupported fields or schema versions require review. The source file stays intact. If settings change during review, open a fresh review. Environment overrides still take precedence over the toolkit configuration file.
+
+Before applying changed toolkit or Zed preferences, import creates private backups. Restore toolkit settings with **Advanced → Restore settings** and Zed preferences with **Configure → Zed settings**. The prior package mapping values can be reviewed by importing the mapping backup file named in the result. Mapping import merges aliases; it leaves aliases absent from the backup in place.
+
+If a browser draft contains outdated or unsupported Local AI or SSH fields, export skips those fields and reports it. Supported settings still export, and the browser draft stays intact.
+
+Profile JSON excludes credentials, private keys, signed model download links, histories, arbitrary shell and application files, model binaries, and service state. It can contain personal paths and LAN hostnames. Review these before sharing the file or using it on another computer. Use [Smart Backup](smart-backup.md) separately for personal files you want to transfer.
+
+## CLI setup defaults
 
 ```bash
 # Export a portable, strictly limited configuration profile
@@ -14,7 +35,7 @@ bash setup.sh profiles show developer
 bash setup.sh packages plan --saved-profile developer
 ```
 
-Profiles are JSON `{"schema":1,"type":"automation-profile","settings":{...}}`. Only allowlisted selection and AI settings are portable. **Credentials, private paths, keys, environment variables, downloaded models and installation history are never exported.** Imported profiles live under `${AUTOMATION_STATE_DIR:-~/.local/state/automation-toolkit}/profiles` with private permissions. `--saved-profile NAME` is a configuration baseline: local `.env`, supported environment variables and explicit CLI flags take precedence. Import does not automatically activate or install a profile. An existing profile cannot be overwritten implicitly.
+CLI profiles record schema 1, the application version, and an allowlisted `settings` object. Only allowlisted selection and AI settings are portable. **CLI profile exports contain no credentials, private paths, keys, raw environment files, downloaded models, or installation history.** Imported profiles live under `${AUTOMATION_STATE_DIR:-~/.local/state/automation-toolkit}/profiles` with private permissions. `--saved-profile NAME` is a configuration baseline: local `.env`, supported environment variables and explicit CLI flags take precedence. Import does not automatically activate or install a profile. An existing profile cannot be overwritten implicitly.
 
 ## Machine-readable plans
 

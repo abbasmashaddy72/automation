@@ -7,16 +7,27 @@ sends model prompts. Container pulls and inference require separate opt-ins.
 
 from __future__ import annotations
 import argparse
+import ast
 from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+SOURCE_EXCLUDES = {
+    ".git",
+    ".cache",
+    ".next",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+    "backups",
+    "logs",
+    "reports",
+}
 BASE_IMAGES = {
     "arch": ("docker.io/library/archlinux:base", "arch"),
     "ubuntu": ("docker.io/library/ubuntu:24.04", "debian"),
@@ -59,21 +70,26 @@ def exec_check(cmd, *, timeout=120, env=None):
         return {"status": "fail", "reason": type(exc).__name__}
 
 
-def python_syntax():
-    import ast
+def source_files(root):
+    sources = {".py": [], ".sh": []}
+    for folder, dirs, names in os.walk(root):
+        dirs[:] = [name for name in dirs if name not in SOURCE_EXCLUDES]
+        for name in names:
+            path = Path(folder) / name
+            if path.suffix in sources and not path.is_symlink() and path.is_file():
+                sources[path.suffix].append(path)
+    return {suffix: sorted(paths) for suffix, paths in sources.items()}
 
-    files = sorted(ROOT.rglob("*.py"))
+
+def python_syntax(files=None):
+    if files is None:
+        files = source_files(ROOT)[".py"]
     errors = []
     for f in files:
-        if any(
-            part in ("__pycache__", ".venv", "backups", "node_modules", ".next")
-            for part in f.relative_to(ROOT).parts
-        ):
-            continue
         try:
-            ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
-        except (SyntaxError, UnicodeError) as exc:
-            errors.append(f"{f.relative_to(ROOT)}: {type(exc).__name__}")
+            ast.parse(f.read_bytes(), filename=str(f))
+        except (SyntaxError, UnicodeError, OSError) as exc:
+            errors.append(f"{f.relative_to(ROOT)}: {type(exc).__name__}: {exc}")
     return {
         "status": "fail" if errors else "pass",
         "files": len(files),
@@ -83,6 +99,7 @@ def python_syntax():
 
 def offline_checks(*, strict_tools=False, strict_format=False):
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    sources = source_files(ROOT)
     checks = {
         "python_unit": exec_check(
             [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-q"],
@@ -92,13 +109,9 @@ def offline_checks(*, strict_tools=False, strict_format=False):
         "bash_syntax": exec_check(
             ["bash", "scripts/check-scripts.sh", "--syntax-only"], timeout=90, env=env
         ),
-        "python_syntax": python_syntax(),
+        "python_syntax": python_syntax(sources[".py"]),
     }
-    shell_files = [
-        str(x.relative_to(ROOT))
-        for x in sorted(ROOT.rglob("*.sh"))
-        if not {"backups", "node_modules", ".next"}.intersection(x.parts)
-    ]
+    shell_files = [str(path.relative_to(ROOT)) for path in sources[".sh"]]
     for exe, command in [
         ("shellcheck", ["shellcheck", "--severity=error", *shell_files]),
         ("shfmt", ["shfmt", "-l", "-i", "4", "-ci", "-sr", *shell_files]),

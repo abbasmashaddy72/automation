@@ -5,8 +5,8 @@ import contextlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
-from pathlib import Path
 import os
+from pathlib import Path
 import subprocess
 import sys
 import tempfile
@@ -222,6 +222,48 @@ class ValidatorSafety(unittest.TestCase):
             )
             for name in ("validation.json", "validation.md"):
                 self.assertEqual((Path(td) / name).stat().st_mode & 0o777, 0o600)
+
+    def test_source_validation_skips_generated_files_and_symlinks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / "toolkit"
+            root.mkdir()
+            external = base / "external.py"
+            external.write_text("not valid python() {}")
+            (root / "link.py").symlink_to(external)
+            for name in ("node_modules", "reports", "backups", ".venv"):
+                folder = root / name
+                folder.mkdir()
+                (folder / "broken.py").write_text(external.read_text())
+                (folder / "broken.sh").write_text("if\n")
+            source = root / "helper.py"
+            source.write_bytes(b"# coding: latin-1\nname = '\xe9'\n")
+            script = root / "example.sh"
+            script.write_text("#!/bin/bash\n")
+            with patch.object(validate, "ROOT", root):
+                self.assertEqual(
+                    validate.source_files(root), {".py": [source], ".sh": [script]}
+                )
+                self.assertEqual(
+                    validate.python_syntax(),
+                    {"status": "pass", "files": 1, "errors": []},
+                )
+                source.write_text("def broken(\n")
+                error = validate.python_syntax()["errors"][0]
+                self.assertIn("helper.py: SyntaxError", error)
+                self.assertIn("line 1", error)
+
+    def test_bash_validation_reports_failed_source_discovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            mock_find = Path(directory) / "find"
+            mock_find.write_text("#!/bin/bash\nexit 7\n")
+            mock_find.chmod(0o755)
+            result = validate.exec_check(
+                ["bash", "scripts/check-scripts.sh", "--syntax-only"],
+                env={**os.environ, "PATH": directory + os.pathsep + os.environ["PATH"]},
+            )
+            self.assertEqual(result["status"], "fail")
+            self.assertIn("Could not enumerate Bash source files", result["details"])
 
     def test_strict_shell_tools_missing_is_failure(self):
         with (

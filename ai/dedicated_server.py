@@ -7,6 +7,7 @@ no driver upgrades, no installation of Ollama/vLLM, no shell execution of URLs.
 
 from __future__ import annotations
 import argparse
+from contextlib import contextmanager
 import datetime
 import hashlib
 import http.client
@@ -17,11 +18,12 @@ from pathlib import Path
 import re
 import secrets
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import time
-from urllib import request, parse, error
+from urllib import request, parse
 
 from hardware_inventory import desktop_details, inventory, run
 from llama_launcher import command as launcher_command
@@ -39,6 +41,7 @@ LAUNCH = Path("/usr/local/lib/automation-ai/llama_launcher.py")
 PROXY_CODE = Path("/usr/local/lib/automation-ai/lan_proxy.py")
 SERVICE = Path("/etc/systemd/system/automation-llamacpp.service")
 GATEWAY = Path("/etc/systemd/system/automation-ai-api.service")
+GATEWAY_LOCK = Path("/run/lock/automation-ai-gateway")
 MARK = "# Managed by Automation Toolkit dedicated llama.cpp server v2.1"
 MODEL_CATALOG = {
     "general": {
@@ -186,7 +189,11 @@ def install_owned(path, content, mode="0644"):
 def load_config():
     if not CFG.is_file():
         raise RuntimeError("No managed llama.cpp config; run install first")
+    if CFG.is_symlink() or CFG.stat().st_size > 65536:
+        raise RuntimeError("Unsafe managed llama.cpp config path or size")
     cfg = json.loads(CFG.read_text())
+    if not isinstance(cfg, dict):
+        raise ValueError("Managed llama.cpp config must be an object")
     return cfg
 
 
@@ -258,7 +265,6 @@ def lan():
 
 
 def detect_backend(info):
-    sysname = info["system"]["os_id"]
     nvidia = [
         g
         for g in info["gpus"]
@@ -319,10 +325,10 @@ def check_conflicts(migrate=False, commit=False):
         raise RuntimeError(
             "Unmanaged inference service active: "
             + ", ".join(unmanaged)
-            + ". Stop it manually"
+            + ". Its running service is preserved."
         )
     if "automation-ai-api" in active:
-        present = action(["cat", GATEWAY], root=True, capture=True, check=False).stdout
+        present = gateway_definition() or ""
         if present.startswith(MARK):
             # The active gateway already belongs to this llama.cpp release.
             # It is not a legacy service; reruns must be idempotent.
@@ -375,19 +381,51 @@ def dependencies(backend, *, build=True, lan_api=False):
         ) from exc
 
 
+def installed_build_backend():
+    if not BIN.is_file() or not BUILD_META.is_file() or BUILD_META.is_symlink():
+        return None
+    try:
+        if BUILD_META.stat().st_size > 65536:
+            return None
+        value = json.loads(BUILD_META.read_text()).get("backend")
+        return value if value in ("cpu", "cuda", "hip", "vulkan") else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def selected_backend(args, info):
+    backend = getattr(args, "backend", "auto")
+    if backend != "auto":
+        return backend
+    installed = installed_build_backend()
+    if installed and not (
+        getattr(args, "update_source", False) or getattr(args, "rebuild", False)
+    ):
+        return installed
+    return detect_backend(info)
+
+
+def build_blocker(args, backend):
+    existing = installed_build_backend()
+    if getattr(args, "rebuild", False) and not existing:
+        return "Reinstall requires a toolkit-owned source build"
+    if BIN.is_file() and not (
+        getattr(args, "update_source", False) or getattr(args, "rebuild", False)
+    ):
+        if not existing:
+            return "Existing build is not toolkit-managed; use a fresh source directory"
+        if existing != backend:
+            return "Existing backend differs; explicitly use --update-source"
+    return None
+
+
 def build_backend(backend, update=False, *, rebuild=False):
-    if rebuild and not BUILD_META.is_file():
-        raise RuntimeError("Reinstall requires a toolkit-owned source build")
+    args = argparse.Namespace(update_source=update, rebuild=rebuild)
+    blocker = build_blocker(args, backend)
+    if blocker:
+        raise RuntimeError(blocker)
     if BIN.is_file() and not (update or rebuild):
-        if not BUILD_META.is_file():
-            raise RuntimeError(
-                "Existing build is not toolkit-managed; use a fresh source directory"
-            )
         existing = json.loads(BUILD_META.read_text())
-        if existing.get("backend") != backend:
-            raise RuntimeError(
-                "Existing backend differs; explicitly use --update-source"
-            )
         print(
             "Reusing existing llama-server with backend",
             backend,
@@ -778,14 +816,38 @@ def wait_health(port=8080, timeout=150):
     return False
 
 
-def gateway_setup(root):
-    net = lan()
-    if not net:
-        raise RuntimeError("No private IPv4 LAN discovered; gateway not installed")
-    if not KEY.exists():
-        with tempfile.TemporaryDirectory() as td:
-            tmp = Path(td) / "key"
-            tmp.write_text(secrets.token_urlsafe(48) + "\n")
+def existing_api_key():
+    if any(path.is_symlink() for path in (KEY, *KEY.parents)):
+        raise RuntimeError("API key path must not contain symlinks")
+    if KEY.parent.exists():
+        parent = KEY.parent.stat()
+        if parent.st_uid != 0 or parent.st_mode & 0o022:
+            raise RuntimeError("API key directory must be writable only by root")
+    try:
+        key = KEY.stat()
+    except FileNotFoundError:
+        return False
+    if (
+        not stat.S_ISREG(key.st_mode)
+        or key.st_uid != 0
+        or key.st_nlink != 1
+        or key.st_mode & 0o037
+        or not 32 <= key.st_size <= 257
+    ):
+        raise RuntimeError("Existing API key file is unsafe")
+    return True
+
+
+def install_api_key(value=None):
+    from auth import validate_key
+
+    value = secrets.token_urlsafe(48) if value is None else validate_key(value)
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td) / "key"
+        tmp.touch(mode=0o600)
+        tmp.write_text(value + "\n")
+        stage = KEY.with_name(".api-key-" + secrets.token_hex(16))
+        try:
             action(
                 [
                     "install",
@@ -797,41 +859,295 @@ def gateway_setup(root):
                     "-g",
                     "ai-llama",
                     tmp,
-                    KEY,
+                    stage,
                 ],
                 root=True,
             )
-    else:
-        st = KEY.stat()
-        if st.st_uid != 0 or st.st_mode & 0o007:
-            raise RuntimeError(
-                "Existing API key permissions are unsafe; refusing reuse"
-            )
-        action(["chgrp", "ai-llama", KEY], root=True)
-        action(["chmod", "0640", KEY], root=True)
-    proxy_changed = install_owned(
-        PROXY_CODE, MARK + "\n" + (HERE / "lan_proxy.py").read_text(), "0755"
+            action(["mv", "-fT", "--", stage, KEY], root=True)
+        finally:
+            action(["rm", "-f", "--", stage], root=True, check=False)
+
+
+def gateway_definition():
+    if GATEWAY.is_symlink() or (GATEWAY.exists() and not GATEWAY.is_file()):
+        raise RuntimeError("The LAN gateway unit must be a regular file")
+    try:
+        return GATEWAY.read_text()
+    except FileNotFoundError:
+        return None
+
+
+def gateway_target():
+    """Accept only the exact toolkit unit and its fixed private key path."""
+    definition = gateway_definition()
+    if not definition or not definition.startswith(MARK + "\n"):
+        raise RuntimeError("API key management requires a toolkit-owned LAN gateway")
+    match = re.search(
+        r" --listen ([0-9.]+) --port 11435 --subnet ([0-9./]+) ", definition
     )
-    # Older toolkit-owned gateway units may have a different marker; backed up explicitly.
-    old = action(["cat", GATEWAY], root=True, check=False, capture=True).stdout
-    if old and "Managed by Automation Toolkit dedicated AI server v2" in old:
-        stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S")
-        action(["cp", "-a", GATEWAY, str(GATEWAY) + ".backup-" + stamp], root=True)
-        action(["rm", "-f", GATEWAY], root=True)
-    gateway_changed = install_owned(GATEWAY, gateway_unit(net["ip"], net["subnet"]))
-    if (
-        proxy_changed
-        or gateway_changed
-        or run(["systemctl", "is-active", "automation-ai-api"]) != "active"
-    ):
-        action(["systemctl", "daemon-reload"], root=True)
-        action(["systemctl", "enable", "--now", "automation-ai-api"], root=True)
-        action(["systemctl", "restart", "automation-ai-api"], root=True)
-    else:
-        print(
-            "Authenticated LAN gateway already configured; preserving active connections"
+    try:
+        if match:
+            address, subnet = match.groups()
+            ip, net = ipaddress.IPv4Address(address), ipaddress.IPv4Network(subnet)
+            if (
+                ip.is_private
+                and not ip.is_loopback
+                and ip in net
+                and definition == gateway_unit(address, subnet)
+            ):
+                return address
+    except ValueError:
+        pass
+    raise RuntimeError("Review the edited LAN gateway before managing its key")
+
+
+def api_key_status():
+    observed = unit_status(GATEWAY.name)
+    result = {
+        "state": "not-configured",
+        "gateway_state": observed.get("ActiveState", "unknown"),
+        "masked": None,
+        "endpoint": None,
+        "verification_supported": False,
+    }
+    try:
+        if gateway_definition() is None:
+            if observed.get("LoadState") == "loaded":
+                result["state"] = "external"
+            return result
+        address = gateway_target()
+        result["endpoint"] = f"http://{address}:11435/v1"
+        result["verification_supported"] = gateway_verifier_installed()
+        result["state"] = "configured" if existing_api_key() else "missing"
+        if result["state"] == "configured":
+            result["masked"] = "••••••••"
+    except (OSError, RuntimeError):
+        result["state"] = "unverified"
+    return result
+
+
+def gateway_verifier_installed(*, exact=True):
+    try:
+        return (
+            PROXY_CODE.is_file()
+            and not PROXY_CODE.is_symlink()
+            and PROXY_CODE.stat().st_uid == 0
+            and not PROXY_CODE.stat().st_mode & 0o022
+            and (
+                PROXY_CODE.read_text()
+                == MARK
+                + "\n# Local gateway verification listener\n"
+                + (HERE / "lan_proxy.py").read_text()
+                if exact
+                else PROXY_CODE.read_text().startswith(
+                    MARK + "\n# Local gateway verification listener\n"
+                )
+            )
         )
-    print("Authenticated OpenAI API: http://" + net["ip"] + ":11435/v1")
+    except OSError:
+        return False
+
+
+def verify_gateway_key():
+    from auth import verify_key
+
+    value = action(["cat", "--", KEY], root=True, capture=True).stdout.strip()
+    deadline = time.monotonic() + 12
+    while time.monotonic() < deadline:
+        try:
+            verified, _ = verify_key("llamacpp", value, port=11435)
+            if verified:
+                return
+        except (OSError, ValueError):
+            pass
+        time.sleep(0.5)
+    raise RuntimeError(
+        "Gateway failed valid, invalid and absent key checks on /v1/models"
+    )
+
+
+@contextmanager
+def gateway_lock():
+    try:
+        action(["mkdir", "-m", "0700", "--", GATEWAY_LOCK], root=True)
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(
+            "Could not lock the managed gateway. Check for another install or key operation."
+        ) from error
+    try:
+        yield
+    finally:
+        action(["rmdir", "--", GATEWAY_LOCK], root=True, check=False)
+
+
+def rotate_api_key(*, generate=False, value=None):
+    gateway_target()
+    check_unit_source(GATEWAY)
+    if not gateway_verifier_installed():
+        raise RuntimeError(
+            "Repair the managed LAN gateway with ai server install --with-lan-api before changing its key"
+        )
+    with gateway_lock():
+        gateway_target()
+        check_unit_source(GATEWAY)
+        present = existing_api_key()
+        if generate == present:
+            raise RuntimeError(
+                "A key already exists; use key-rotate or key-update"
+                if present
+                else "Key is missing; use key-generate"
+            )
+        active = unit_status(GATEWAY.name).get("ActiveState") == "active"
+        if present and not active:
+            raise RuntimeError("Start the owned gateway before replacing its key")
+        if not active and unit_status(SERVICE.name).get("ActiveState") != "active":
+            raise RuntimeError(
+                "Start the managed llama.cpp service before generating a key"
+            )
+        backup = KEY.with_name(".api-key-backup-" + secrets.token_hex(16))
+        if present:
+            action(["cp", "-a", "--", KEY, backup], root=True)
+        try:
+            install_api_key(value)
+            action(["systemctl", "restart", GATEWAY.name], root=True)
+            verify_gateway_key()
+        except (OSError, RuntimeError, subprocess.SubprocessError, KeyboardInterrupt):
+            if present:
+                action(["mv", "-fT", "--", backup, KEY], root=True)
+            else:
+                action(["rm", "-f", "--", KEY], root=True)
+            action(
+                ["systemctl", "restart" if active else "stop", GATEWAY.name], root=True
+            )
+            raise
+        if present:
+            action(["rm", "-f", "--", backup], root=True)
+        print(
+            "Gateway key saved. The new key works and invalid and missing keys are refused."
+        )
+
+
+def revoke_api_key():
+    gateway_target()
+    check_unit_source(GATEWAY)
+    with gateway_lock():
+        gateway_target()
+        check_unit_source(GATEWAY)
+        present = existing_api_key()
+        previous = unit_status(GATEWAY.name)
+        try:
+            action(["systemctl", "stop", GATEWAY.name], root=True)
+            if unit_status(GATEWAY.name).get("ActiveState") != "inactive":
+                raise RuntimeError("Gateway did not stop; its key was kept")
+            action(["systemctl", "disable", GATEWAY.name], root=True)
+            if present:
+                action(["rm", "--", KEY], root=True)
+        except (OSError, RuntimeError, subprocess.SubprocessError, KeyboardInterrupt):
+            if previous.get("UnitFileState") == "enabled":
+                action(["systemctl", "enable", GATEWAY.name], root=True, check=False)
+            if previous.get("ActiveState") == "active":
+                action(["systemctl", "start", GATEWAY.name], root=True, check=False)
+            raise
+    print("Gateway stopped and disabled. Its API key has been revoked.")
+
+
+def key_command(args, parser):
+    from auth import copy_key, validate_key
+
+    operation = args.action
+    if operation == "key-status":
+        print(json.dumps(api_key_status(), indent=2))
+        return 0
+    if args.dry_run:
+        print(f"Dry run: {operation} for the toolkit-owned LAN gateway.")
+        return 0
+    if operation in ("key-show", "key-copy"):
+        gateway_target()
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            raise RuntimeError(
+                "Use a private interactive terminal to reveal or copy the key"
+            )
+        if not existing_api_key():
+            raise RuntimeError("The managed LAN API key is missing")
+        value = validate_key(
+            action(["cat", "--", KEY], root=True, capture=True).stdout.strip()
+        )
+        if operation == "key-copy":
+            return copy_key(value)
+        print(value)
+        return 0
+    if not args.yes:
+        parser.error("Changing the gateway key requires --yes")
+    if operation == "key-revoke":
+        revoke_api_key()
+    elif operation == "key-update":
+        from getpass import getpass
+
+        if not sys.stdin.isatty() or not sys.stdout.isatty():
+            raise RuntimeError(
+                "Enter the replacement key in a private interactive terminal"
+            )
+        rotate_api_key(value=validate_key(getpass("Replacement API key: ")))
+    else:
+        rotate_api_key(generate=operation == "key-generate")
+    return 0
+
+
+def gateway_setup(root):
+    old = gateway_definition()
+    legacy = bool(
+        old
+        and re.fullmatch(
+            r"# Managed by Automation Toolkit dedicated AI server v2(?:\.\d+)?",
+            old.splitlines()[0],
+        )
+    )
+    if old is not None and not legacy and not old.startswith(MARK + "\n"):
+        raise RuntimeError("Existing LAN gateway is not toolkit-owned")
+    net = lan()
+    if not net:
+        raise RuntimeError("No private IPv4 LAN discovered; gateway not installed")
+    with gateway_lock():
+        if gateway_definition() != old:
+            raise RuntimeError("Gateway unit changed during review; retry")
+        if (
+            not gateway_verifier_installed(exact=False)
+            or unit_status(GATEWAY.name).get("ActiveState") != "active"
+        ):
+            check_listen_port(11435)
+        if not existing_api_key():
+            install_api_key()
+        else:
+            action(["chgrp", "ai-llama", KEY], root=True)
+            action(["chmod", "0640", KEY], root=True)
+        proxy_changed = install_owned(
+            PROXY_CODE,
+            MARK
+            + "\n# Local gateway verification listener\n"
+            + (HERE / "lan_proxy.py").read_text(),
+            "0755",
+        )
+        # Older toolkit-owned gateway units may have a different marker; backed up explicitly.
+        if legacy:
+            stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
+                "%Y%m%d%H%M%S"
+            )
+            action(["cp", "-a", GATEWAY, str(GATEWAY) + ".backup-" + stamp], root=True)
+            action(["rm", "-f", GATEWAY], root=True)
+        gateway_changed = install_owned(GATEWAY, gateway_unit(net["ip"], net["subnet"]))
+        if (
+            proxy_changed
+            or gateway_changed
+            or run(["systemctl", "is-active", "automation-ai-api"]) != "active"
+        ):
+            action(["systemctl", "daemon-reload"], root=True)
+            action(["systemctl", "enable", "--now", "automation-ai-api"], root=True)
+            action(["systemctl", "restart", "automation-ai-api"], root=True)
+        else:
+            print(
+                "Authenticated LAN gateway already configured; preserving active connections"
+            )
+        print("Authenticated OpenAI API: http://" + net["ip"] + ":11435/v1")
 
 
 def temperature_ok(max_c=83):
@@ -972,14 +1288,43 @@ def check_installed_storage(config, storage):
             )
 
 
+def service_file_compatible():
+    try:
+        return not SERVICE.is_symlink() and (
+            not SERVICE.exists()
+            or (SERVICE.is_file() and SERVICE.read_text().startswith(MARK + "\n"))
+        )
+    except OSError:
+        return False
+
+
+def check_listen_port(port):
+    import socket
+
+    with socket.socket() as listener:
+        try:
+            listener.bind(("127.0.0.1", port))
+        except OSError as exc:
+            raise RuntimeError(
+                f"Cannot bind 127.0.0.1:{port}; check the existing listener"
+            ) from exc
+
+
 def installation(args):
     _, reasons = host_support()
     if reasons:
         raise RuntimeError("; ".join(reasons))
     root = server_storage.checked_root(args.data_root)
+    if external_llama_running():
+        raise RuntimeError(
+            "External llama.cpp is running. Verify its existing endpoint instead of installing a duplicate."
+        )
     check_conflicts(args.migrate_legacy, commit=False)
     i = inventory()
-    backend = detect_backend(i) if args.backend == "auto" else args.backend
+    backend = selected_backend(args, i)
+    blocker = build_blocker(args, backend)
+    if blocker:
+        raise RuntimeError(blocker)
     if backend == "cpu" and getattr(args, "gpu_layers", 0):
         raise ValueError("Choose a GPU-capable build before setting GPU layers")
     if backend == "metal":
@@ -988,10 +1333,8 @@ def installation(args):
         )
     if backend == "cuda" and not run(["nvidia-smi", "-L"]):
         raise RuntimeError("NVIDIA driver not functional")
-    if backend == "hip" and not shutil.which("hipcc"):
-        raise RuntimeError("ROCm compiler absent")
     # Refuse preexisting foreign service names and configurations before expensive work.
-    if SERVICE.exists() and not SERVICE.read_text().startswith(MARK):
+    if not service_file_compatible():
         raise RuntimeError("Foreign llama.cpp service exists")
     previous = load_config() if CFG.exists() else None
     port = getattr(args, "port", None) or (
@@ -1004,15 +1347,12 @@ def installation(args):
     if run(["systemctl", "is-active", "automation-llamacpp"]) != "active" or (
         previous and port != previous.get("port", 8080)
     ):
-        import socket
-
-        with socket.socket() as listener:
-            try:
-                listener.bind(("127.0.0.1", port))
-            except OSError as exc:
-                raise RuntimeError(
-                    f"Cannot bind 127.0.0.1:{port}; check the existing listener"
-                ) from exc
+        check_listen_port(port)
+    if args.with_lan_api and (
+        not gateway_verifier_installed(exact=False)
+        or unit_status(GATEWAY.name).get("ActiveState") != "active"
+    ):
+        check_listen_port(11435)
     settings = profile(i, args.profile)
     if args.model and args.model_url:
         raise RuntimeError("Select a local --model OR a --model-url, not both")
@@ -1127,7 +1467,14 @@ def installation(args):
     ):
         cfg.update(context=previous["context"], context_manual=True)
     check_conflicts(args.migrate_legacy, commit=True)
-    if previous and not args.reconfigure and not args.model and not args.model_url:
+    if (
+        previous
+        and not args.reconfigure
+        and not args.model_url
+        and selected == previous.get("model")
+        and backend == previous.get("backend")
+        and getattr(args, "gpu_layers", None) is None
+    ):
         cfg = previous
         print(
             "Preserving previous hardware settings; supply --reconfigure for explicit profile changes"
@@ -1278,15 +1625,37 @@ def assess_models(info, storage, backend, layers, *, gpu_ready):
 
 def make_plan(args):
     info = inventory()
-    backend = (
-        detect_backend(info)
-        if getattr(args, "backend", "auto") == "auto"
-        else args.backend
-    )
+    backend = selected_backend(args, info)
     if backend == "cpu" and getattr(args, "gpu_layers", 0):
         raise ValueError("Choose a GPU-capable build before setting GPU layers")
     host, reasons = host_support()
-    config = load_config() if CFG.exists() else {}
+    blocker = build_blocker(args, backend)
+    if blocker:
+        reasons = [*reasons, blocker]
+    config, existing_config = config_summary()
+    if external_llama_running():
+        reasons = [
+            *reasons,
+            "External llama.cpp is running. Verify its existing endpoint instead of installing a duplicate.",
+        ]
+    elif existing_config in ("invalid", "external"):
+        reasons = [*reasons, "Existing llama.cpp configuration requires review."]
+    elif not service_file_compatible():
+        reasons = [*reasons, "Existing llama.cpp service requires review."]
+    try:
+        check_conflicts(getattr(args, "migrate_legacy", False))
+    except (OSError, RuntimeError) as error:
+        reasons = [*reasons, str(error)]
+    port = getattr(args, "port", None) or config.get("port", 8080)
+    if config and port != config["port"] and not getattr(args, "reconfigure", False):
+        reasons = [*reasons, "Changing an installed port requires --reconfigure"]
+    if unit_status(SERVICE.name).get("ActiveState") != "active" or port != config.get(
+        "port"
+    ):
+        try:
+            check_listen_port(port)
+        except RuntimeError as error:
+            reasons = [*reasons, str(error)]
     try:
         storage = disk(args.data_root)
         check_installed_storage(config, storage)
@@ -1362,7 +1731,7 @@ def make_plan(args):
             args.data_root,
             str(Path(args.data_root) / "models"),
         ],
-        "port": getattr(args, "port", None) or config.get("port", 8080),
+        "port": port,
         "backend_verified": False,
         "managed_install_supported": not reasons,
         "native_manager": host["manager"],
@@ -1370,6 +1739,16 @@ def make_plan(args):
         "unmounted_volumes": volumes,
         "storage": storage,
         "lan": lan(),
+        "existing_engines": engine_inventory(),
+        "api_authentication": api_key_status(),
+        "existing_configuration": existing_config,
+        "binary_action": "update"
+        if getattr(args, "update_source", False)
+        else "rebuild"
+        if getattr(args, "rebuild", False)
+        else "reuse"
+        if BIN.is_file()
+        else "install",
         "existing_services": {
             n: run(["systemctl", "is-active", n])
             for n in ("ollama", "vllm", "automation-llamacpp", "automation-ai-api")
@@ -1387,29 +1766,14 @@ def make_plan(args):
 
 
 def print_status(args):
-    cfg = None
-    try:
-        cfg = load_config()
-    except (RuntimeError, OSError):
-        pass
+    cfg, configuration_state = config_summary()
     try:
         state = disk(args.data_root)
         check_installed_storage(cfg, state)
-    except (RuntimeError, OSError) as e:
+    except (RuntimeError, OSError, ValueError, KeyError) as e:
         state = {"ready": False, "error": str(e)}
-    observed = dict(
-        line.split("=", 1)
-        for line in run(
-            [
-                "systemctl",
-                "show",
-                SERVICE.name,
-                "--property=LoadState,ActiveState,UnitFileState",
-            ]
-        ).splitlines()
-        if "=" in line
-    )
-    configured = bool(cfg and cfg.get("_managed") == MARK)
+    observed = unit_status(SERVICE.name)
+    configured = configuration_state == "configured"
     service = observed.get("ActiveState", "")
     boot = observed.get("UnitFileState", "")
     readiness = None
@@ -1429,7 +1793,9 @@ def print_status(args):
         "managed_binary": BIN.is_file(),
         "api_ready": readiness,
         "gateway": run(["systemctl", "is-active", "automation-ai-api"]),
-        "config": {k: v for k, v in (cfg or {}).items() if k != "_managed"},
+        "config": cfg,
+        "configuration_state": configuration_state,
+        "api_authentication": api_key_status(),
         "gpu": run(
             [
                 "nvidia-smi",
@@ -1480,66 +1846,142 @@ def benchmark_action(args):
     return 0
 
 
+def unit_status(service, *, user=False):
+    return dict(
+        line.split("=", 1)
+        for line in run(
+            [
+                "systemctl",
+                *(["--user"] if user else []),
+                "show",
+                service,
+                "--property=LoadState,ActiveState,UnitFileState,MainPID",
+            ]
+        ).splitlines()
+        if "=" in line
+    )
+
+
+def external_llama_running(managed=None):
+    managed = unit_status(SERVICE.name) if managed is None else managed
+    if any(
+        unit_status(service, user=user).get("ActiveState") == "active"
+        for service, user in (
+            ("llama-server.service", False),
+            ("llama-server.service", True),
+            (SERVICE.name, True),
+        )
+    ):
+        return True
+    processes = set(run(["pgrep", "-x", "llama-server"]).split())
+    return bool(processes - {managed.get("MainPID", "0")})
+
+
+STATUS_FIELDS = frozenset(
+    "data_root model binary context threads batch ubatch parallel port alias gpu_layers "
+    "storage_mount storage_uuid flash_attn backend profile context_manual".split()
+)
+
+
+def config_summary():
+    if not (CFG.exists() or CFG.is_symlink()):
+        return {}, "missing"
+    try:
+        cfg = load_config()
+        if cfg.get("_managed") != MARK:
+            return {}, "external"
+        if (
+            any(
+                type(cfg.get(key)) is not str
+                for key in ("data_root", "model", "binary")
+            )
+            or type(cfg.get("port")) is not int
+            or not 1024 <= cfg["port"] <= 65535
+        ):
+            return {}, "invalid"
+        return {
+            key: cfg[key]
+            for key in sorted(STATUS_FIELDS & cfg.keys())
+            if type(cfg[key]) in (str, int, bool, type(None))
+        }, "configured"
+    except (OSError, RuntimeError, ValueError, TypeError, AttributeError):
+        return {}, "invalid"
+
+
 def engine_inventory():
     result = []
+    config, configured = config_summary()
     for name, executable, services, port in (
-        (
-            "llama.cpp",
-            "llama-server",
-            ("automation-llamacpp.service", "llama-server.service"),
-            8080,
-        ),
+        ("llama.cpp", "llama-server", (SERVICE.name, "llama-server.service"), 8080),
         ("Ollama", "ollama", ("ollama.service",), 11434),
         ("vLLM", "vllm", ("vllm.service",), 8000),
+        ("Jan", "jan", ("jan.service",), 1337),
     ):
-        states = []
-        for service in services:
-            for scope in ([], ["--user"]):
-                states.append(
-                    run(
-                        [
-                            "systemctl",
-                            *scope,
-                            "show",
-                            service,
-                            "-p",
-                            "ActiveState",
-                            "-p",
-                            "LoadState",
-                            "--value",
-                        ]
-                    ).splitlines()
+        managed = name == "llama.cpp"
+        states = [
+            {
+                "unit": service,
+                "scope": "user" if user else "system",
+                "load": observed.get("LoadState", "unknown"),
+                "active": observed.get("ActiveState", "unknown"),
+            }
+            for service in services
+            for user in (False, True)
+            if (observed := unit_status(service, user=user)).get("LoadState")
+            == "loaded"
+        ]
+        owned = False
+        if managed and configured == "configured":
+            try:
+                owned = not SERVICE.is_symlink() and SERVICE.read_text() == unit(
+                    config["data_root"]
                 )
-        running = any("active" in state for state in states) or bool(
+            except OSError:
+                pass
+        running = any(row["active"] == "active" for row in states) or bool(
             run(["pgrep", "-x", executable])
         )
         installed = bool(
-            shutil.which(executable)
-            or any("loaded" in state for state in states)
-            or (name == "llama.cpp" and BIN.is_file())
+            shutil.which(executable) or states or (managed and BIN.is_file())
         )
-        owned = (
-            name == "llama.cpp"
-            and SERVICE.is_file()
-            and not SERVICE.is_symlink()
-            and SERVICE.read_text().startswith(MARK)
-            and CFG.is_file()
+        invalid = (
+            any(row["active"] == "failed" for row in states)
+            or (managed and configured in ("invalid", "external"))
+            or (owned and not Path(config["model"]).is_file())
         )
         result.append(
             {
-                "installed": installed or running,
+                "installed": installed or running or invalid,
                 "owned_service": owned,
                 "engine": name,
-                "state": "running"
+                "state": "needs-attention"
+                if invalid
+                else "running"
                 if running
                 else "stopped"
                 if installed
                 else "unavailable",
                 "default_port": port,
-                "managed": name == "llama.cpp",
+                "managed": managed,
+                "services": states,
+                "endpoint": f"http://127.0.0.1:{config['port']}/v1" if owned else None,
+                "model": config.get("model") if owned else None,
+                "port": config.get("port") if owned else None,
+                "build_backend": installed_build_backend() if managed else None,
             }
         )
     return result
+
+
+def check_unit_source(path):
+    fragment = run(
+        ["systemctl", "show", path.name, "--property=FragmentPath", "--value"]
+    )
+    drop_ins = run(
+        ["systemctl", "show", path.name, "--property=DropInPaths", "--value"]
+    )
+    if fragment != str(path) or drop_ins:
+        raise RuntimeError("Review systemd overrides before managing this service")
 
 
 def managed_service_config():
@@ -1551,14 +1993,7 @@ def managed_service_config():
         or SERVICE.read_text() != unit(cfg["data_root"])
     ):
         raise RuntimeError("The llama.cpp service differs from the toolkit definition")
-    fragment = run(
-        ["systemctl", "show", SERVICE.name, "--property=FragmentPath", "--value"]
-    )
-    drop_ins = run(
-        ["systemctl", "show", SERVICE.name, "--property=DropInPaths", "--value"]
-    )
-    if fragment != str(SERVICE) or drop_ins:
-        raise RuntimeError("Review systemd overrides before managing this service")
+    check_unit_source(SERVICE)
     return cfg
 
 
@@ -1708,10 +2143,16 @@ def main(argv=None):
             "benchmark",
             "tune",
             "urls",
+            "key-status",
             "key-show",
+            "key-copy",
+            "key-generate",
+            "key-update",
             "key-rotate",
+            "key-revoke",
             "doctor",
             "engines",
+            "inspect",
             "start",
             "stop",
             "restart",
@@ -1741,6 +2182,7 @@ def main(argv=None):
         default="127.0.0.1",
         help="Loopback host for verify",
     )
+    p.add_argument("--inspect-backend", choices=("llamacpp", "ollama", "vllm", "jan"))
     p.add_argument("--port", type=int, metavar="PORT")
     p.add_argument(
         "--context-tokens",
@@ -1795,7 +2237,9 @@ def main(argv=None):
     ):
         p.error("--gpu-layers 0–999 is valid for plan, install and switch")
     minimum_port = (
-        1 if args.action in ("verify", "port-check", "runtime-context") else 1024
+        1
+        if args.action in ("verify", "port-check", "runtime-context", "inspect")
+        else 1024
     )
     if args.port is not None and not minimum_port <= args.port <= 65535:
         p.error(f"Port must be between {minimum_port} and 65535")
@@ -1843,12 +2287,17 @@ def main(argv=None):
     if args.action == "build" and not args.dry_run:
         if not args.yes:
             raise ValueError("Use --yes after reviewing the build plan")
+        if external_llama_running() and not BIN.is_file():
+            raise RuntimeError(
+                "External llama.cpp is running. Verify its existing endpoint before building another copy."
+            )
         _, reasons = host_support()
         if reasons:
             raise RuntimeError("; ".join(reasons))
-        backend = (
-            detect_backend(inventory()) if args.backend == "auto" else args.backend
-        )
+        backend = selected_backend(args, inventory())
+        blocker = build_blocker(args, backend)
+        if blocker:
+            raise RuntimeError(blocker)
         if backend == "metal":
             raise ValueError("Metal requires a native macOS build")
         if not BIN.is_file() or args.update_source or args.rebuild:
@@ -1869,13 +2318,29 @@ def main(argv=None):
             print(health.getvalue(), end="")
             return status
         return model_inventory("llamacpp", args.host, port)
+    if args.action == "inspect":
+        from ai_health import inspect_models
+
+        backend = args.inspect_backend or "llamacpp"
+        config, _ = config_summary()
+        port = args.port or (config.get("port") if backend == "llamacpp" else None)
+        print(json.dumps(inspect_models(backend, args.host, port), indent=2))
+        return 0
+    if args.inspect_backend is not None:
+        p.error("--inspect-backend requires inspect")
     if args.action == "engines":
         print(json.dumps(engine_inventory(), indent=2))
         return 0
     if args.action in ("start", "stop", "restart") and not args.dry_run:
         return service_control(args.action, args.yes)
+    if args.action.startswith("key-"):
+        return key_command(args, p)
     if args.data_root is None:
-        args.data_root = load_config()["data_root"] if CFG.exists() else str(ROOT)
+        if args.action in ("status", "doctor", "plan"):
+            config, _ = config_summary()
+            args.data_root = config.get("data_root", str(ROOT))
+        else:
+            args.data_root = load_config()["data_root"] if CFG.exists() else str(ROOT)
     args.data_root = str(server_storage.checked_root(args.data_root))
     if args.action == "plan" or args.dry_run:
         print(json.dumps(make_plan(args), indent=2))
@@ -1905,47 +2370,8 @@ def main(argv=None):
     if args.action == "urls":
         port = load_config().get("port", 8080) if CFG.exists() else 8080
         print(f"Private llama.cpp: http://127.0.0.1:{port}/v1")
-        info = lan()
-        print(
-            "Authenticated LAN API:",
-            f"http://{info['ip']}:11435/v1" if info else "LAN not detected",
-        )
-        return 0
-    if args.action == "key-show":
-        if not sys.stdout.isatty():
-            raise RuntimeError("Display the key only in a private interactive terminal")
-        print("Warning: key is secret; avoid screen sharing and shell history.")
-        action(["cat", KEY], root=True)
-        return 0
-    if args.action == "key-rotate":
-        if not args.yes:
-            p.error(
-                "Key rotation requires --yes; existing clients will stop authenticating"
-            )
-        with tempfile.TemporaryDirectory() as td:
-            tmp = Path(td) / "key"
-            tmp.write_text(secrets.token_urlsafe(48) + "\n")
-            if KEY.exists():
-                stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
-                    "%Y%m%d%H%M%S"
-                )
-                action(["cp", "-a", KEY, str(KEY) + ".backup-" + stamp], root=True)
-            action(
-                [
-                    "install",
-                    "-D",
-                    "-m",
-                    "0640",
-                    "-o",
-                    "root",
-                    "-g",
-                    "ai-llama",
-                    tmp,
-                    KEY,
-                ],
-                root=True,
-            )
-        action(["systemctl", "restart", "automation-ai-api"], root=True)
+        status = api_key_status()
+        print("Authenticated LAN API:", status.get("endpoint") or "No verified gateway")
         return 0
     if args.action == "benchmark":
         if not 1 <= args.repeats <= 10 or not 1 <= args.concurrency <= 8:

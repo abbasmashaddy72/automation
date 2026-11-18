@@ -8,7 +8,6 @@ import json
 import os
 from pathlib import Path
 import re
-import stat
 import uuid
 from urllib.parse import urlsplit
 
@@ -40,29 +39,9 @@ def decode(raw):
 
 
 def read(path, *, missing=False, private=False, owned=True, limit=LIMIT):
-    path = filesystem.checked(path)
-    try:
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except FileNotFoundError:
-        if missing:
-            return None
-        raise
-    with os.fdopen(fd, "rb") as stream:
-        st = os.fstat(stream.fileno())
-        if (
-            not stat.S_ISREG(st.st_mode)
-            or (owned and st.st_uid != os.getuid())
-            or st.st_nlink != 1
-            or st.st_size > limit
-            or (private and st.st_mode & 0o077)
-        ):
-            raise ValueError(
-                "Settings and backups must be bounded, owned regular files"
-            )
-        data = stream.read(limit + 1)
-        if len(data) > limit:
-            raise ValueError("Settings or backup exceeds size limit")
-        return data
+    return filesystem.read_regular(
+        path, limit=limit, missing=missing, private=private, owned=owned
+    )
 
 
 def digest(raw):
@@ -131,7 +110,7 @@ def merge(current, profile, prefix=()):
     return changes
 
 
-def backup(state, target, before, expected):
+def backup(state, target, before, expected, *, announce=True):
     folder = journal.state_dir(state)
     name = "zed-" + uuid.uuid4().hex + ".json"
     record = {
@@ -144,7 +123,8 @@ def backup(state, target, before, expected):
     import workflows
 
     workflows.write_json(folder / name, record, private=True)
-    print("Zed backup:", name)
+    if announce:
+        print("Zed backup:", name)
     return name
 
 
@@ -261,6 +241,21 @@ def telemetry(args, approve, *, state=""):
     return 0
 
 
+def settings_path():
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    if not config_home.is_absolute():
+        raise ValueError("XDG_CONFIG_HOME must be absolute")
+    return filesystem.checked(config_home / "zed/settings.json")
+
+
+def overlay(target, updates):
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            overlay(target[key], value)
+        else:
+            target[key] = value
+
+
 def main(args, approve, *, root, state=""):
     operation = args.action or "status"
     if operation not in (
@@ -284,10 +279,7 @@ def main(args, approve, *, root, state=""):
         "restore",
     ):
         raise ValueError("Unexpected Zed argument")
-    config_home = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-    if not config_home.is_absolute():
-        raise ValueError("XDG_CONFIG_HOME must be absolute")
-    target = filesystem.checked(config_home / "zed/settings.json")
+    target = settings_path()
     before = read(target, missing=True)
     if operation == "show":
         print(
@@ -325,14 +317,6 @@ def main(args, approve, *, root, state=""):
         incoming = decode(read(profile, owned=bool(args.value)))
         data = json.loads(json.dumps(original))
         if operation == "override":
-
-            def overlay(target, updates):
-                for key, value in updates.items():
-                    if isinstance(value, dict) and isinstance(target.get(key), dict):
-                        overlay(target[key], value)
-                    else:
-                        target[key] = value
-
             overlay(data, incoming)
         elif operation == "replace":
             data = incoming

@@ -19,3 +19,5 @@ bash setup.sh smart-backup run --destination /mnt/backup --copy Documents --zip 
 Use `--include-hidden` to change the default, or `--hidden-in FOLDER` and `--visible-only-in FOLDER` for individual selections. Repeat `--exclude-dir NAME` for additional exclusions, or pass `--clear-default-exclusions` to start with no exclusions. Checksums are the default. `--verification quick` compares copy metadata and checks ZIP integrity.
 
 Use `--root-files` to copy visible files directly under the source without the full preset. Use `--skip-folder RELATIVE/PATH` to exclude a subtree or clear a preset folder.
+
+Both ZIP verification modes compare the archive's member list with the backup inventory before publishing the backup.

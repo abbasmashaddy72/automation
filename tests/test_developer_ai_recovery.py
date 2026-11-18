@@ -15,13 +15,9 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "lib"), str(ROOT / "ai")]
-import auth
-import automation
 import checklist
 import developer
-import manager
 import models
-import ssh_ops
 
 
 class MigrationFixtures(unittest.TestCase):
@@ -452,55 +448,3 @@ class HubMigration(unittest.TestCase):
         self.assertEqual(
             [x["name"] for x in result["files"]], ["config.json", "model.safetensors"]
         )
-
-    def test_key_import_env_private_idempotent_preserves_source_and_conflicts(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            source = root / "old.env"
-            value = "sk-local-" + "x" * 40
-            source.write_text("VLLM_API_KEY=" + value + "\n")
-            source.chmod(0o600)
-            args = Namespace(
-                action="key-import",
-                backend="vllm",
-                key_file=root / "private/key",
-                legacy_key_file=source,
-                yes=True,
-                dry_run=False,
-            )
-            with contextlib.redirect_stdout(io.StringIO()) as out:
-                self.assertEqual(auth.main(args), 0)
-                self.assertEqual(auth.main(args), 0)
-                self.assertEqual(auth.read(args.key_file), value)
-                self.assertTrue(source.exists())
-                self.assertNotIn(value, out.getvalue())
-                source.write_text("VLLM_API_KEY=" + "y" * 40)
-                with self.assertRaises(ValueError):
-                    auth.main(args)
-                source.write_text("VLLM_API_KEY=$(evil)")
-                with self.assertRaises(ValueError):
-                    auth.main(args)
-
-    def test_key_import_refusal_dryrun_and_public_source(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            source = root / "source"
-            source.write_text("x" * 40)
-            source.chmod(0o644)
-            args = Namespace(
-                action="key-import",
-                backend="llamacpp",
-                key_file=root / "private/key",
-                legacy_key_file=source,
-                yes=False,
-                dry_run=False,
-            )
-            with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(auth.main(args), 4)
-                args.yes = True
-                args.dry_run = True
-                self.assertEqual(auth.main(args), 0)
-                args.dry_run = False
-                with self.assertRaises(ValueError):
-                    auth.main(args)
-            self.assertFalse(args.key_file.exists())

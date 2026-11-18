@@ -2,14 +2,15 @@
 
 from argparse import Namespace
 import contextlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -95,6 +96,35 @@ class ProductionInputs(unittest.TestCase):
             with self.assertRaises(ValueError):
                 deploy.validate_health_url(url)
         self.assertEqual(deploy.validate_health_url("http://[::1]:8080/up").port, 8080)
+
+    def test_health_rejects_truncated_http_200_and_retries(self):
+        class Handler(BaseHTTPRequestHandler):
+            requests = 0
+
+            def do_GET(self):
+                type(self).requests += 1
+                self.send_response(200)
+                self.send_header("Content-Length", "10" if self.requests < 3 else "02")
+                self.end_headers()
+                self.wfile.write(b"ok")
+
+            def log_message(self, *args):
+                pass
+
+        with ThreadingHTTPServer(("127.0.0.1", 0), Handler) as server:
+            worker = threading.Thread(target=server.serve_forever, daemon=True)
+            worker.start()
+            try:
+                url = f"http://127.0.0.1:{server.server_port}/up"
+                with self.assertRaisesRegex(ValueError, "health check failed"):
+                    deploy.health(url, "fixture.test", attempts=1)
+                with patch("laravel_toolkit.deploy.time.sleep") as retry:
+                    deploy.health(url, "fixture.test", attempts=2)
+                    retry.assert_called_once()
+                self.assertEqual(Handler.requests, 3)
+            finally:
+                server.shutdown()
+                worker.join()
 
     def test_private_destinations_and_redirects_are_rejected(self):
         with (

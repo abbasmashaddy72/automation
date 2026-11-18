@@ -19,6 +19,31 @@ import smart_backup
 
 
 class SmartBackupTests(unittest.TestCase):
+    def test_zip_verification_rejects_a_valid_archive_with_missing_members(self):
+        archive_class = zipfile.ZipFile
+
+        def omit_members(path, mode="r", **options):
+            if mode == "r":
+                with archive_class(path, "w") as archive:
+                    archive.writestr("Project Sites/", b"")
+            return archive_class(path, mode, **options)
+
+        for verification in ("quick", "checksum"):
+            with self.subTest(verification=verification):
+                plan, inventories, destination = smart_backup.prepare(
+                    {**self.spec, "verification": verification}
+                )
+                with (
+                    patch.object(
+                        smart_backup.zipfile, "ZipFile", side_effect=omit_members
+                    ),
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
+                    self.assertRaisesRegex(ValueError, "ZIP members differ"),
+                ):
+                    smart_backup.execute(plan, inventories, destination)
+                self.assertFalse(list(self.destination.glob("smart-backup-*")))
+
     def setUp(self):
         self.work = Path(self.enter_temp())
         self.source = self.work / "home"

@@ -129,13 +129,18 @@ def auth_headers(key_file=None):
     return {"Authorization": "Bearer " + auth.read(key_file)}
 
 
-def model_inventory(backend, host="127.0.0.1", port=None, *, key_file=None):
-    if backend not in ("vllm", "jan", "llamacpp"):
-        raise ValueError("OpenAI model inventory supports llama.cpp, vLLM, and Jan")
-    url = endpoint(backend, host, port if port is not None else DEFAULT_PORTS[backend])
-
+def inspect_models(backend, host="127.0.0.1", port=None, *, key_file=None):
+    if backend not in DEFAULT_PORTS:
+        raise ValueError("Unsupported AI backend")
+    url = endpoint(backend, host, DEFAULT_PORTS[backend] if port is None else port)
     if backend == "llamacpp":
         url = url.rsplit("/", 1)[0] + "/v1/models"
+    result = {
+        "backend": backend,
+        "endpoint": url,
+        "authentication": "unknown",
+        "models": [],
+    }
 
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *args):
@@ -150,23 +155,45 @@ def model_inventory(backend, host="127.0.0.1", port=None, *, key_file=None):
             if response.status != 200 or len(raw) > 65536:
                 raise ValueError("Invalid model inventory")
         value = json.loads(raw)
-        if not isinstance(value, dict) or not isinstance(value.get("data"), list):
-            raise ValueError("Invalid model inventory schema")
-        names = [
-            row["id"]
-            for row in value["data"]
-            if isinstance(row, dict) and isinstance(row.get("id"), str)
-        ]
-        print(json.dumps({"backend": backend, "models": names[:250]}, indent=2))
-        return 0
-    except (OSError, ValueError) as exc:
-        if isinstance(exc, urllib.error.HTTPError):
-            exc.close()
-        print(
-            "Model inventory unavailable:",
-            f"HTTP {exc.code}" if isinstance(exc, urllib.error.HTTPError) else str(exc),
+        items, name = ("models", "name") if backend == "ollama" else ("data", "id")
+        if not isinstance(value, dict) or not isinstance(value.get(items), list):
+            raise ValueError("Invalid model inventory")
+        result.update(
+            state="reachable",
+            authentication="credential-accepted"
+            if key_file
+            else "accessible-without-credentials",
+            models=[
+                row[name][:256]
+                for row in value[items][:250]
+                if isinstance(row, dict) and isinstance(row.get(name), str)
+            ],
         )
-        return 3
+    except urllib.error.HTTPError as error:
+        error.close()
+        result.update(
+            state="protected" if error.code in (401, 403) else "http-error",
+            http_status=error.code,
+        )
+        if result["state"] == "protected":
+            result["authentication"] = "credentials-or-access-policy-required"
+    except (OSError, ValueError):
+        result["state"] = "unreachable-or-invalid"
+    return result
+
+
+def model_inventory(backend, host="127.0.0.1", port=None, *, key_file=None):
+    if backend not in ("vllm", "jan", "llamacpp"):
+        raise ValueError("OpenAI model inventory supports llama.cpp, vLLM, and Jan")
+    result = inspect_models(backend, host, port, key_file=key_file)
+    if result["state"] == "reachable":
+        print(json.dumps({"backend": backend, "models": result["models"]}, indent=2))
+        return 0
+    print(
+        "Model inventory unavailable:",
+        f"HTTP {result['http_status']}" if "http_status" in result else result["state"],
+    )
+    return 3
 
 
 def check_api(backend, host="127.0.0.1", port=None, *, key_file=None):

@@ -1,6 +1,5 @@
 """Portable workflows regression contracts: portable, offline and explicitly non-destructive."""
 
-import hashlib
 import json
 import pathlib
 import sys

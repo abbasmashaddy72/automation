@@ -17,7 +17,6 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "ai"), str(ROOT / "lib")]
 import gguf
-import manager
 import models
 import snapshots
 

@@ -36,3 +36,5 @@ bash setup.sh packages restore reviewed-packages.json --dry-run
 ```
 
 Native restore uses exact IDs and a matching platform. Mixed-source plans serve as an inventory. See [portable profiles and offline receipts](workflows.md) for formats, replay approval and limitations.
+
+For an explicit DNF reinstall, the preview requires the same installed package epoch, version, release, and architecture in enabled repository metadata. If that RPM is absent, the package remains unavailable for reinstall. [DNF reinstall reference](https://dnf.readthedocs.io/en/latest/command_ref.html#reinstall-command) · [DNF5 repository query formatting](https://dnf5.readthedocs.io/en/latest/commands/repoquery.8.html#formatting-options)

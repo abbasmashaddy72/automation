@@ -15,7 +15,6 @@
   "dependencies": {
     "@ai-sdk/openai": "3.0.143",
     "@ai-sdk/react": "3.0.335",
-    "@hookform/resolvers": "^5.2.2",
     "@napi-rs/canvas": "0.1.88",
     "ai": "6.0.332",
     "class-variance-authority": "^0.7.1",
@@ -48,7 +47,6 @@
     "@types/papaparse": "^5.5.2",
     "@types/react": "19.2.4",
     "@types/react-dom": "19.2.3",
-    "autoprefixer": "^10.4.20",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.4.6",

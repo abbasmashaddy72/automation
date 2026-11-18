@@ -1,7 +1,6 @@
 """Optional parent runner bridge. All Laravel tests live in the portable folder."""
 
 from pathlib import Path
-import unittest
 
 
 def load_tests(loader, tests, pattern):

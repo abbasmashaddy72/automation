@@ -1,7 +1,6 @@
 """Verified GGUF bundles and read-only legacy selection recovery (stdlib only)."""
 
 from __future__ import annotations
-from argparse import Namespace
 import json
 from pathlib import Path
 import re

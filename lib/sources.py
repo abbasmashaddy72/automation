@@ -11,7 +11,6 @@ import re
 import os
 import shutil
 import subprocess
-import time
 import cache
 
 from discovery import validate_term

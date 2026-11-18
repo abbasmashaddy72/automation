@@ -12,7 +12,19 @@ case "$MODE" in --check | --format | --syntax-only) ;; *)
 esac
 cd "$BASE"
 
-mapfile -d '' FILES < <(find . -type d \( -name node_modules -o -name .next -o -name .git \) -prune -o -type f -name '*.sh' -print0 | sort -z)
+mapfile -d '' FILES < <(
+    find . -type d \( \
+        -name .git -o -name .cache -o -name .next -o -name .venv -o -name __pycache__ -o \
+        -name node_modules -o -name backups -o -name logs -o -name reports \
+        \) -prune -o -type f -name '*.sh' -print0 | sort -z && printf '\0'
+)
+# The empty final record confirms discovery completed even though mapfile
+# cannot report the exit code of its process substitution.
+if (("${#FILES[@]}" == 0)) || [[ -n "${FILES[-1]}" ]]; then
+    printf 'FAIL: Could not enumerate Bash source files.\n' >&2
+    exit 1
+fi
+unset 'FILES[-1]'
 failed=0
 printf 'Checking %s Bash scripts...\n' "${#FILES[@]}"
 for file in "${FILES[@]}"; do
@@ -46,19 +58,17 @@ else
 fi
 if command -v python3 > /dev/null 2>&1; then
     # Parse Python helpers without writing __pycache__ into the project.
-    python3 - "${BASE}" << 'PY'
-import ast, pathlib, sys
-root=pathlib.Path(sys.argv[1]); failed=[]
-import os
-for directory, children, names in os.walk(root):
-    children[:] = [name for name in children if name not in ('.git','.next','node_modules','.venv','__pycache__')]
-    for name in names:
-        if not name.endswith('.py'): continue
-        f=pathlib.Path(directory)/name
-        try: ast.parse(f.read_text(),filename=str(f))
-        except SyntaxError as e: failed.append(f'{f}: {e}')
-for e in failed: print('FAIL Python:',e,file=sys.stderr)
-if failed: sys.exit(1)
+    python3 -B - << 'PY'
+import sys
+
+sys.path.insert(0, "scripts")
+from validate import python_syntax
+
+result = python_syntax()
+for error in result["errors"]:
+    print("FAIL Python:", error, file=sys.stderr)
+if result["status"] != "pass":
+    sys.exit(1)
 print('Python helper syntax: passed')
 PY
 fi

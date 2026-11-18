@@ -12,9 +12,10 @@ import os
 from pathlib import Path
 import re
 import tempfile
-from datetime import datetime, timezone
 
 import journal
+
+APPLICATION_VERSION = "2026.11.18"
 
 PROFILE_KEYS = {
     "AUTOMATION_PROFILE",
@@ -81,17 +82,33 @@ def write_json(path: Path, value, *, private=False):
 
 def profile_data(settings):
     values = {k: v for k, v in settings.items() if k in PROFILE_KEYS}
-    return {"schema": 1, "type": "automation-profile", "settings": values}
+    return {
+        "schema": 1,
+        "type": "automation-profile",
+        "settings": values,
+        "application_version": APPLICATION_VERSION,
+    }
+
+
+def profile_version(value):
+    if value is not None and (
+        not isinstance(value, str)
+        or not re.fullmatch(r"[0-9]{1,4}(?:\.[0-9]{1,2}){2}", value)
+    ):
+        raise ValueError("Invalid application version")
+    return value
 
 
 def validate_profile(obj, validate_settings):
     if (
         not isinstance(obj, dict)
-        or set(obj) != {"schema", "type", "settings"}
+        or set(obj) - {"schema", "type", "settings", "application_version"}
+        or not {"schema", "type", "settings"} <= obj.keys()
         or obj["schema"] != 1
         or obj["type"] != "automation-profile"
     ):
         raise ValueError("Unsupported profile schema")
+    profile_version(obj.get("application_version"))
     values = obj["settings"]
     if not isinstance(values, dict) or set(values) - PROFILE_KEYS:
         raise ValueError("Profile contains forbidden settings")
@@ -123,7 +140,7 @@ def import_profile(source, state, validate_settings):
     destination = profile_dir(state) / (name + ".json")
     write_json(
         destination,
-        {"schema": 1, "type": "automation-profile", "settings": values},
+        profile_data(values),
         private=True,
     )
     return destination

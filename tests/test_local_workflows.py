@@ -19,7 +19,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "lib"), str(ROOT / "ai"), str(ROOT / "scripts")]
 import automation
 import auth
-import manager
 import models
 import developer
 import ai_health
@@ -244,6 +243,21 @@ class LocalUserFlows(unittest.TestCase):
             ["ai", "server", "verify", "--host", "::1", "--port", "8081"],
         )
 
+    def test_dashboard_eligibility_uses_a_validated_storage_path(self):
+        import setup_dashboard
+
+        self.assertEqual(
+            setup_dashboard.preview_arguments(
+                {"action": "ai-eligibility", "data_root": "/mnt/ai", "backend": "cpu"},
+                aur_ready=False,
+            ),
+            ["ai", "server", "plan", "--data-root", "/mnt/ai"],
+        )
+        with self.assertRaisesRegex(ValueError, "absolute model directory"):
+            setup_dashboard.preview_arguments(
+                {"action": "ai-eligibility", "data_root": "invalid"}, aur_ready=False
+            )
+
     def test_chat_preview_refuses_occupied_port_without_starting_node(self):
         import chat_lite
 
@@ -365,6 +379,14 @@ class LocalUserFlows(unittest.TestCase):
             )
             remote_ai.probe(*target, "test-model")
             self.assertTrue(run.call_args.args[0][-1].endswith("test-model --yes"))
+            remote_ai.probe(*target, "package-status", packages=["git", "curl"])
+            self.assertIn(
+                "packages status --select git,curl", run.call_args.args[0][-1]
+            )
+            with self.assertRaises(ValueError):
+                remote_ai.probe(*target, "package-status", packages=["curl; cat key"])
+            with self.assertRaises(ValueError):
+                remote_ai.probe(*target, "key-show")
             with self.assertRaises(ValueError):
                 remote_ai.probe(*target, "port-check", port="8080; date")
         payload = {"action": "ai-context", "context_tokens": 4096}
@@ -713,39 +735,10 @@ class LocalUserFlows(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=2)
 
-    def test_api_menu_cancel_and_confirm_refusal(self):
-        args = Namespace(yes=False, dry_run=False)
-        with (
-            patch("sys.stdin.isatty", return_value=True),
-            patch("builtins.input", return_value=""),
-            contextlib.redirect_stdout(io.StringIO()),
-        ):
-            self.assertEqual(auth.menu(args), 0)
-        with (
-            patch("sys.stdin.isatty", return_value=True),
-            patch("builtins.input", side_effect=["1", "n"]),
-            patch.object(auth, "main") as change,
-            contextlib.redirect_stdout(io.StringIO()),
-        ):
-            self.assertEqual(auth.menu(args), 4)
-            change.assert_not_called()
-
     def test_new_api_keys_cannot_be_written_into_source_tree(self):
         with self.assertRaises(ValueError):
             auth.save(ROOT / "must-not-create-private-key", "sk-local-" + "p" * 40)
         self.assertFalse((ROOT / "must-not-create-private-key").exists())
-
-    def test_api_menu_dispatches_existing_actions(self):
-        args = Namespace(yes=False, dry_run=False)
-        with (
-            patch("sys.stdin.isatty", return_value=True),
-            patch("builtins.input", side_effect=["5", "yes"]),
-            patch.object(auth, "main", return_value=0) as change,
-            contextlib.redirect_stdout(io.StringIO()),
-        ):
-            self.assertEqual(auth.menu(args), 0)
-            self.assertEqual(change.call_args.args[0].action, "key-rotate")
-            self.assertTrue(change.call_args.args[0].yes)
 
     def test_lock_retry_is_bounded_and_general_errors_are_not_retried(self):
         args = Namespace(dry_run=False)

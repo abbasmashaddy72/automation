@@ -6,7 +6,6 @@ import argparse
 import http.client
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import socket

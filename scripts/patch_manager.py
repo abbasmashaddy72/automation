@@ -9,11 +9,13 @@ unrecoverable power loss, but automatic on caught application errors.
 
 from __future__ import annotations
 import argparse
+import ast
 import contextlib
 import fcntl
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path, PurePosixPath
 import shutil
@@ -76,6 +78,50 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def file_checksum(path):
+    if path.is_file():
+        return sha(path.read_bytes())
+    if path.exists():
+        raise ValueError(f"Patch destination is not a regular file: {path}")
+    return None
+
+
+def replace_file(path, data, mode, *, metadata=None):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, stage = tempfile.mkstemp(dir=path.parent, prefix=".automation-stage-")
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fchmod(stream.fileno(), mode)
+            if metadata is not None:
+                shutil.copystat(metadata, stage)
+            os.fsync(stream.fileno())
+        os.replace(stage, path)
+    finally:
+        Path(stage).unlink(missing_ok=True)
+
+
+def validate_payload_sources(z, ops, *, payload_prefix="payload/"):
+    for op in ops:
+        if op["action"] == "delete":
+            continue
+        name = op["path"]
+        if name.endswith(".py"):
+            ast.parse(z.read(payload_prefix + name), filename=name)
+        elif name.endswith(".sh"):
+            result = subprocess.run(
+                ["bash", "--noprofile", "--norc", "-n"],
+                input=z.read(payload_prefix + name),
+                capture_output=True,
+                env={
+                    key: value for key, value in os.environ.items() if key != "BASH_ENV"
+                },
+            )
+            if result.returncode:
+                raise ValueError("Bash validation failed: " + name)
+
+
 def verify_authenticity(z, *, allow_unsigned=True, trust_keys=()):
     """Local updates use SHA-256; optional signatures are verified when present.
 
@@ -134,6 +180,28 @@ def verify_authenticity(z, *, allow_unsigned=True, trust_keys=()):
     raise ValueError("Patch signature verification failed for all trusted public keys")
 
 
+def validate_operation_fields(op):
+    if not isinstance(op, dict) or op.get("action") not in (
+        "add",
+        "modify",
+        "delete",
+        "rename",
+    ):
+        raise ValueError("Invalid patch operation")
+    if "mode" in op and (
+        type(op["mode"]) is not int or op["mode"] not in (0o644, 0o755)
+    ):
+        raise ValueError("Invalid file mode")
+    for key in ("old_sha256", "sha256"):
+        value = op.get(key)
+        if value is not None and (
+            not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value)
+        ):
+            raise ValueError("Bad checksum")
+    if op["action"] != "add" and not op.get("old_sha256"):
+        raise ValueError("Missing original checksum")
+
+
 def read_zip(z):
     members = z.infolist()
     if len(members) > MAX_FILES or sum(i.file_size for i in members) > MAX_SIZE:
@@ -150,31 +218,21 @@ def read_zip(z):
     if z.namelist().count("manifest.json") != 1:
         raise ValueError("Missing or duplicate manifest")
     manifest = json.loads(z.read("manifest.json"))
-    if manifest.get("format") != 1 or not isinstance(manifest.get("operations"), list):
+    if (
+        not isinstance(manifest, dict)
+        or manifest.get("format") != 1
+        or not isinstance(manifest.get("operations"), list)
+    ):
         raise ValueError("Invalid manifest format")
     operations = manifest["operations"]
     paths = set()
     renamed_sources = set()
     for op in operations:
-        if not isinstance(op, dict):
-            raise ValueError("Invalid patch operation")
+        validate_operation_fields(op)
         path = valid_name(op["path"])
         if path in paths:
             raise ValueError("Duplicate operation destination")
         paths.add(path)
-        if op["action"] not in ("add", "modify", "delete", "rename"):
-            raise ValueError("Invalid patch operation")
-        if "mode" in op and (
-            type(op["mode"]) is not int or op["mode"] not in (0o644, 0o755)
-        ):
-            raise ValueError("Invalid file mode")
-        for key in ("old_sha256", "sha256"):
-            if (
-                key in op
-                and op[key] is not None
-                and not __import__("re").fullmatch(r"[a-f0-9]{64}", op[key])
-            ):
-                raise ValueError("Bad checksum")
         if op["action"] == "rename":
             old = valid_name(op["from"])
             if old in paths or old in renamed_sources:
@@ -182,8 +240,6 @@ def read_zip(z):
             renamed_sources.add(old)
             target_path(old)
         target_path(path)
-        if op["action"] != "add" and not op.get("old_sha256"):
-            raise ValueError("Missing original checksum")
         if op["action"] in ("add", "modify", "rename"):
             member = "payload/" + path
             if member not in seen:
@@ -260,7 +316,7 @@ def restore(folder, *, verify_current=False):
     if verify_current:
         for rel, expected in state.get("applied", {}).items():
             dest = target_path(rel)
-            current = sha(dest.read_bytes()) if dest.is_file() else None
+            current = file_checksum(dest)
             if current != expected:
                 raise ValueError(
                     f"Rollback conflict: {rel} was modified since applying patch"
@@ -272,16 +328,17 @@ def restore(folder, *, verify_current=False):
                 dest.unlink()
         else:
             src = folder / "originals" / rel
-            if sha(src.read_bytes()) != old_sha:
+            data = src.read_bytes()
+            if sha(data) != old_sha:
                 raise ValueError("Corrupt rollback backup")
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dest)
+            replace_file(dest, data, src.stat().st_mode & 0o777, metadata=src)
     print("Restored original files from:", folder)
 
 
-def apply(z, ops, force=False):
+def apply(z, ops, force=False, *, payload_prefix="payload/"):
     if not check(ops, force):
         return 3
+    validate_payload_sources(z, ops, payload_prefix=payload_prefix)
     bdir = backup_root() / (time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8])
     # Fine-grained changes are backed up before the first file changes.
     bdir.mkdir(mode=0o700)
@@ -308,34 +365,30 @@ def apply(z, ops, force=False):
     write_state(bdir, {"originals": originals, "expected": expected})
     try:
         for op in ops:
-            dest = target_path(op["path"])
+            name = op["path"]
+            source_name = op["from"] if op["action"] == "rename" else name
+            for path in {name, source_name}:
+                if file_checksum(target_path(path)) != originals[path]:
+                    raise ValueError(f"Patch conflict: {path} changed after backup")
+            if not force and (
+                (op["action"] != "add" and originals[source_name] != op["old_sha256"])
+                or (op["action"] in ("add", "rename") and originals[name] is not None)
+            ):
+                raise ValueError(f"Patch conflict: {name} changed during preflight")
+            dest = target_path(name)
             if op["action"] in ("delete", "rename"):
                 source = target_path(op["from"]) if op["action"] == "rename" else dest
                 if source.is_file():
                     source.unlink()
             if op["action"] in ("add", "modify", "rename"):
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                # Same-filesystem temporary staging enables atomic individual replacements.
-                fd, stage = tempfile.mkstemp(
-                    dir=dest.parent, prefix=".automation-stage-"
+                mode = bdir / "originals" / name
+                replace_file(
+                    dest,
+                    z.read(payload_prefix + name),
+                    op.get(
+                        "mode", mode.stat().st_mode & 0o777 if mode.exists() else 0o644
+                    ),
                 )
-                try:
-                    with os.fdopen(fd, "wb") as f:
-                        f.write(z.read("payload/" + op["path"]))
-                        f.flush()
-                        os.fsync(f.fileno())
-                    mode = bdir / "originals" / op["path"]
-                    os.chmod(
-                        stage,
-                        op.get(
-                            "mode",
-                            mode.stat().st_mode & 0o777 if mode.exists() else 0o644,
-                        ),
-                    )
-                    os.replace(stage, dest)
-                finally:
-                    if Path(stage).exists():
-                        Path(stage).unlink()
         # Safely prune only empty directories left behind by moved/deleted files.
         # Never remove nonempty folders, user data, or unrelated directories.
         for op in ops:
@@ -353,29 +406,12 @@ def apply(z, ops, force=False):
                 except OSError:
                     break
                 parent = parent.parent
-        # Validate new shell/Python source before marking the patch installed.
-        import subprocess
-
-        scripts = sorted(ROOT.rglob("*.sh"))
-        for script in scripts:
-            if "/.git/" in str(script):
-                continue
-            result = subprocess.run(["bash", "-n", str(script)], capture_output=True)
-            if result.returncode:
-                raise ValueError("Bash validation failed: " + str(script))
-        for py in ROOT.rglob("*.py"):
-            import ast
-
-            ast.parse(py.read_bytes(), filename=str(py))
     except BaseException:
-        restore(bdir)
+        recover(bdir)
         raise
     state_path = bdir / "state.json"
     state = json.loads(state_path.read_text())
-    state["applied"] = {
-        rel: sha((ROOT / rel).read_bytes()) if (ROOT / rel).is_file() else None
-        for rel in affected
-    }
+    state["applied"] = expected
     write_state(bdir, state)
     (bdir / "applied").write_text("validated\n")
     print("Applied successfully. Backup:", bdir)
@@ -407,7 +443,7 @@ def recover(folder):
         raise ValueError("This backup has no interrupted-update recovery receipt")
     for rel, original in state["originals"].items():
         path = target_path(rel)
-        current = sha(path.read_bytes()) if path.is_file() else None
+        current = file_checksum(path)
         if current not in (original, state["expected"].get(rel)):
             raise ValueError(
                 "Recovery conflict: " + rel + " was edited outside the patch"
@@ -502,6 +538,7 @@ def main(argv=None):
             )
             print("Patch operations:", len(ops))
             if args.check:
+                validate_payload_sources(z, ops)
                 return 0 if check(ops) else 3
             return apply(z, ops, args.force)
 
@@ -512,6 +549,7 @@ if __name__ == "__main__":
     except (
         OSError,
         ValueError,
+        SyntaxError,
         KeyError,
         zipfile.BadZipFile,
         json.JSONDecodeError,

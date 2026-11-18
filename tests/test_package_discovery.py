@@ -1,6 +1,5 @@
 """Safe package discovery: lookup is read-only and candidates are never silently installed."""
 
-import argparse
 import contextlib
 import io
 import sys

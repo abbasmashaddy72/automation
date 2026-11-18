@@ -1,6 +1,5 @@
 """Unified entrypoint, native sources and CPU settings; no legacy installers."""
 
-from argparse import Namespace
 import contextlib
 import http.server
 import io
@@ -128,7 +127,7 @@ class UnifiedCLIIntegration(unittest.TestCase):
         # The old bootstrap installed an AUR helper implicitly. The unified
         # replacement must report source options without installing one.
         import sys
-        from unittest.mock import patch, Mock
+        from unittest.mock import Mock
 
         sys.path.insert(0, str(BASE / "lib"))
         import sources

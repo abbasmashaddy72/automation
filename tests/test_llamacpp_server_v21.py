@@ -4,12 +4,9 @@ Runs without Ubuntu, CUDA, disk mounts, root, or downloaded model weights.
 """
 
 from __future__ import annotations
-import importlib
 import ipaddress
 import json
-import os
 from pathlib import Path
-import socket
 import subprocess
 import sys
 import tempfile
@@ -176,9 +173,7 @@ class FakeGPUTests(unittest.TestCase):
         unit = ds.MARK + "\n[Unit]\nDescription=Authenticated LAN API gateway"
         with (
             mock.patch.object(ds, "run", side_effect=fake_run),
-            mock.patch.object(
-                ds, "action", return_value=type("Result", (), {"stdout": unit})()
-            ),
+            mock.patch.object(ds, "gateway_definition", return_value=unit),
         ):
             self.assertIn("automation-ai-api", ds.check_conflicts(migrate=False))
 
@@ -196,7 +191,14 @@ class FakeGPUTests(unittest.TestCase):
         self.assertFalse(plan["storage"]["ready"])
 
     def test_plan_does_not_report_free_space_on_a_fallback_mount(self):
-        config = {"data_root": "/srv/ai", "storage_mount": "/srv/ai"}
+        config = {
+            "_managed": ds.MARK,
+            "data_root": "/srv/ai",
+            "storage_mount": "/srv/ai",
+            "model": "/srv/ai/model.gguf",
+            "binary": str(ds.BIN),
+            "port": 8080,
+        }
         fallback = {
             "directory": "/srv/ai",
             "mount": "/",
@@ -220,6 +222,162 @@ class FakeGPUTests(unittest.TestCase):
         self.assertIn(
             "Restore the configured model filesystem", plan["storage"]["error"]
         )
+
+    def test_managed_key_rotation_dry_run_and_unapproved_requests_do_not_mutate(self):
+        with mock.patch.object(ds, "action") as mutate:
+            self.assertEqual(ds.main(["key-rotate", "--dry-run", "--yes"]), 0)
+            with self.assertRaises(SystemExit) as refusal:
+                ds.main(["key-rotate"])
+            self.assertEqual(refusal.exception.code, 2)
+            mutate.assert_not_called()
+
+    def test_key_rotation_refuses_a_foreign_gateway_and_overrides(self):
+        with tempfile.TemporaryDirectory() as directory:
+            gateway = Path(directory) / ds.GATEWAY.name
+            gateway.write_text("Independent gateway\n")
+            with (
+                mock.patch.object(ds, "GATEWAY", gateway),
+                mock.patch.object(ds, "action") as mutate,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "toolkit-owned"):
+                    ds.rotate_api_key()
+                with self.assertRaisesRegex(RuntimeError, "toolkit-owned"):
+                    ds.gateway_setup(Path(directory))
+                gateway.write_text("")
+                with self.assertRaisesRegex(RuntimeError, "toolkit-owned"):
+                    ds.gateway_setup(Path(directory))
+                gateway.write_text(ds.gateway_unit("192.168.1.2", "192.168.1.0/24"))
+                with mock.patch.object(
+                    ds, "run", side_effect=[str(gateway), "/etc/override.conf"]
+                ):
+                    with self.assertRaisesRegex(RuntimeError, "systemd overrides"):
+                        ds.rotate_api_key()
+                mutate.assert_not_called()
+
+    def test_failed_key_verification_restores_previous_working_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            gateway = Path(directory) / ds.GATEWAY.name
+            key = Path(directory) / "api-key"
+            gateway.write_text(
+                ds.gateway_unit("192.168.1.2", "192.168.1.0/24").replace(
+                    str(ds.KEY), str(key)
+                )
+            )
+            key.write_text("original")
+            observed = []
+
+            def execute(argv, **kwargs):
+                self.assertTrue(kwargs["root"])
+                if argv[0] == "cp":
+                    argv[-1].write_bytes(key.read_bytes())
+                elif argv[0] == "mv":
+                    argv[-2].replace(key)
+                elif argv[0] == "systemctl":
+                    observed.append((argv[1], key.read_text()))
+
+            with (
+                mock.patch.object(ds, "GATEWAY", gateway),
+                mock.patch.object(ds, "KEY", key),
+                mock.patch.object(ds, "check_unit_source"),
+                mock.patch.object(
+                    ds, "unit_status", return_value={"ActiveState": "active"}
+                ),
+                mock.patch.object(ds, "gateway_verifier_installed", return_value=True),
+                mock.patch.object(ds, "existing_api_key", return_value=True),
+                mock.patch.object(
+                    ds, "install_api_key", side_effect=lambda _: key.write_text("new")
+                ),
+                mock.patch.object(
+                    ds, "verify_gateway_key", side_effect=RuntimeError("check failed")
+                ),
+                mock.patch.object(ds, "action", side_effect=execute),
+                self.assertRaisesRegex(RuntimeError, "check failed"),
+            ):
+                ds.rotate_api_key()
+            self.assertEqual(key.read_text(), "original")
+            self.assertEqual(observed, [("restart", "new"), ("restart", "original")])
+
+    def test_key_revocation_stops_and_disables_only_owned_gateway(self):
+        with (
+            mock.patch.object(ds, "gateway_target"),
+            mock.patch.object(ds, "check_unit_source"),
+            mock.patch.object(ds, "existing_api_key", return_value=True),
+            mock.patch.object(
+                ds,
+                "unit_status",
+                side_effect=[
+                    {"ActiveState": "active", "UnitFileState": "enabled"},
+                    {"ActiveState": "inactive"},
+                ],
+            ),
+            mock.patch.object(ds, "action") as run,
+        ):
+            ds.revoke_api_key()
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertEqual(
+            commands[1:-1],
+            [
+                ["systemctl", "stop", ds.GATEWAY.name],
+                ["systemctl", "disable", ds.GATEWAY.name],
+                ["rm", "--", ds.KEY],
+            ],
+        )
+        self.assertEqual(commands[0][0], "mkdir")
+        self.assertEqual(commands[-1][0], "rmdir")
+
+    def test_key_status_reports_only_mask_for_owned_gateway(self):
+        with (
+            mock.patch.object(
+                ds,
+                "gateway_definition",
+                return_value=ds.gateway_unit("192.168.1.2", "192.168.1.0/24"),
+            ),
+            mock.patch.object(ds, "existing_api_key", return_value=True),
+            mock.patch.object(ds, "gateway_verifier_installed", return_value=True),
+            mock.patch.object(
+                ds, "unit_status", return_value={"ActiveState": "active"}
+            ),
+            mock.patch.object(ds, "action") as privileged,
+        ):
+            state = ds.api_key_status()
+            self.assertEqual(state["state"], "configured")
+            self.assertEqual(state["masked"], "••••••••")
+            self.assertEqual(state["endpoint"], "http://192.168.1.2:11435/v1")
+            privileged.assert_not_called()
+
+    def test_auto_backend_reuses_existing_build_before_detecting_hardware(self):
+        from argparse import Namespace
+
+        with (
+            mock.patch.object(ds, "installed_build_backend", return_value="cpu"),
+            mock.patch.object(ds, "detect_backend", return_value="cuda") as detect,
+        ):
+            self.assertEqual(ds.selected_backend(Namespace(backend="auto"), {}), "cpu")
+            detect.assert_not_called()
+            self.assertEqual(
+                ds.selected_backend(Namespace(backend="auto", update_source=True), {}),
+                "cuda",
+            )
+
+    def test_external_llama_is_distinguished_from_the_managed_process(self):
+        with (
+            mock.patch.object(ds, "unit_status", return_value={}),
+            mock.patch.object(ds, "run", return_value="203"),
+        ):
+            self.assertFalse(ds.external_llama_running({"MainPID": "203"}))
+            self.assertTrue(ds.external_llama_running({"MainPID": "101"}))
+
+    def test_managed_key_refuses_a_symlink_before_privileged_reads(self):
+        with tempfile.TemporaryDirectory() as directory:
+            key = Path(directory) / "api-key"
+            key.symlink_to(Path(directory) / "missing")
+            with (
+                mock.patch.object(ds, "KEY", key),
+                mock.patch.object(ds, "action") as privileged,
+                self.assertRaisesRegex(RuntimeError, "symlinks"),
+            ):
+                ds.existing_api_key()
+            privileged.assert_not_called()
 
     def test_retired_engines_rejected(self):
         cmd = ["bash", str(ROOT / "setup.sh"), "ai", "ollama", "install"]
@@ -334,6 +492,25 @@ class GatewayIntegration(unittest.TestCase):
         with self.assertRaises(error.HTTPError) as e:
             self.open("/v1/models", token="invalid")
         self.assertEqual(e.exception.code, 401)
+
+    def test_key_verification_checks_the_live_protected_route(self):
+        from auth import verify_key
+
+        verifies, statuses = verify_key(
+            "llamacpp", self.secret.decode(), port=self.gateway.server_port
+        )
+        self.assertTrue(verifies)
+        self.assertEqual(statuses, (200, 401, 401))
+        verifies, _ = verify_key("llamacpp", "x" * 32, port=self.gateway.server_port)
+        self.assertFalse(verifies)
+
+    def test_protected_endpoint_can_be_inspected_without_disclosing_credentials(self):
+        from ai_health import inspect_models
+
+        result = inspect_models("llamacpp", port=self.gateway.server_port)
+        self.assertEqual(result["state"], "protected")
+        self.assertEqual(result["models"], [])
+        self.assertNotIn(self.secret.decode(), json.dumps(result))
 
     def test_gateway_proxies_models(self):
         with self.open("/v1/models", token=self.secret.decode()) as res:

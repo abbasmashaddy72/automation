@@ -7,8 +7,6 @@ import io
 import json
 import os
 from pathlib import Path
-import shutil
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -16,8 +14,6 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "ai"), str(ROOT / "lib")]
-import auth
-import manager
 import snapshots
 
 

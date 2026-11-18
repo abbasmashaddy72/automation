@@ -14,6 +14,8 @@ def probe(
     *,
     port=None,
     context_tokens=None,
+    packages=None,
+    inspect_backend=None,
 ):
     if not isinstance(host, str) or not re.fullmatch(
         r"[a-zA-Z0-9][a-zA-Z0-9.:-]{0,252}", host
@@ -36,7 +38,7 @@ def probe(
     ):
         raise ValueError("Use an absolute model storage folder on the server")
     if port is not None and (
-        operation not in ("verify", "port-check", "runtime-context")
+        operation not in ("verify", "port-check", "runtime-context", "inspect")
         or type(port) is not int
         or not 1 <= port <= 65535
     ):
@@ -45,6 +47,11 @@ def probe(
         type(context_tokens) is not int or not 256 <= context_tokens <= 131072
     ):
         raise ValueError("Choose a context size from 256 to 131072 tokens")
+    if inspect_backend is not None and (
+        operation != "inspect"
+        or inspect_backend not in ("llamacpp", "ollama", "vllm", "jan")
+    ):
+        raise ValueError("Choose a supported backend to inspect")
     setup = directory.rstrip("/") + "/setup.sh"
     if operation == "detect":
         commands = [
@@ -52,7 +59,16 @@ def probe(
             ["bash", setup, "ai", "server", "hardware"],
             ["bash", setup, "ai", "server", "engines"],
         ]
+    elif operation == "package-status":
+        from discovery import validate_term
+
+        if not isinstance(packages, list) or not 1 <= len(packages) <= 150:
+            raise ValueError("Select 1–150 packages to inspect on the remote server")
+        names = ",".join(dict.fromkeys(validate_term(name) for name in packages))
+        commands = [["bash", setup, "packages", "status", "--select", names]]
     elif operation in (
+        "key-status",
+        "inspect",
         "plan",
         "models",
         "status",
@@ -74,6 +90,7 @@ def probe(
                 operation,
                 *(["--data-root", data_root] if data_root else []),
                 *(["--port", str(port)] if port is not None else []),
+                *(["--inspect-backend", inspect_backend] if inspect_backend else []),
                 *(
                     ["--context-tokens", str(context_tokens), "--dry-run"]
                     if operation == "context"

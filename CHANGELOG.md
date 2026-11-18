@@ -4,6 +4,22 @@ Dates follow recorded Git author dates or the local date of changes still in the
 
 ## 2026-11-18
 
+- Kept read-only checklist refreshes from blocking another dashboard workflow.
+- Verified installed RPM versions against cache-only DNF repository queries before reinstall.
+- Deduplicated native package targets and extended validation for repeat installs, explicit reinstalls, profile restoration, checklist persistence, and backup contents.
+
+- Added local and SSH inference endpoint inspection, masked managed gateway key status, verified credential replacement with rollback, and installed-build reuse by default.
+
+- Added verified native findutils setup when a disposable regression fixture lacks find.
+- Added versioned System profile export and reviewed import for toolkit defaults, dashboard choices, package mappings, and supported Zed settings. Imports migrate earlier CLI profiles and preserve unrelated configuration.
+
+- Apply verified full releases through the shared updater without rebuilding the archive in memory. Validate their source files during preview.
+- Skip generated directories and symlinks during source validation, and remove unused Python imports and ChatGPT Lite dependencies.
+- Validate patch source before replacing files and preserve conflicting edits during recovery.
+- Restrict LAN API key rotation to toolkit-owned gateways and restore the prior key if a restart fails.
+- Verify that backup ZIPs contain the reviewed inventory and reject truncated Laravel health responses.
+- Block direct AI installation when the model storage review fails and verify the workflow in an isolated CI browser session.
+- Remove the unused AI resource planner and retired key-command dispatcher.
 - Aligned the backup ID field with its restore preview action and stacked the controls on narrow screens.
 - Standardized dashboard tab spacing, separated the AI execution target from the build controls, and grouped model storage checks.
 - Displayed each selected package ID on a separate line.

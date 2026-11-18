@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 import argparse
+import http.client
 import json
 import os
 from pathlib import Path
 import pwd
 import re
 import shutil
-import signal
-import socket
 import subprocess
 import time
 import urllib.error
@@ -55,9 +54,19 @@ def health(url, domain, *, attempts=5):
             with opener.open(
                 urllib.request.Request(url, headers={"Host": domain}), timeout=5
             ) as response:
-                if response.status == 200 and len(response.read(65537)) <= 65536:
-                    return
-        except (OSError, urllib.error.HTTPError) as exc:
+                if response.status == 200:
+                    body = response.read(65537)
+                    lengths = response.headers.get_all("Content-Length", [])
+                    declared = lengths[0].strip() if len(lengths) == 1 else ""
+                    if len(body) <= 65536 and (
+                        not lengths
+                        or (
+                            re.fullmatch(r"[0-9]+", declared)
+                            and (declared.lstrip("0") or "0") == str(len(body))
+                        )
+                    ):
+                        return
+        except (OSError, http.client.HTTPException) as exc:
             if isinstance(exc, urllib.error.HTTPError):
                 exc.close()
         if attempt + 1 < attempts:

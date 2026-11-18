@@ -46,12 +46,10 @@ interface UseChatSessionReturn {
 }
 
 type ChatSessionError =
-  | { source: 'composer'; message: string }
-  | { source: 'dismissed-stream'; error: Error }
+  { source: 'composer'; message: string } | { source: 'dismissed-stream'; error: Error }
 
 type PreparedSendResult =
-  | { error: string }
-  | { parts: ReturnType<typeof buildUserMessageParts>; personaPrompt: string }
+  { error: string } | { parts: ReturnType<typeof buildUserMessageParts>; personaPrompt: string }
 
 type StreamPhaseParams = {
   isLoading: boolean

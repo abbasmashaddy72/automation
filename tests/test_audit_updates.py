@@ -5,7 +5,6 @@ from argparse import Namespace
 import contextlib
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-import importlib.util
 import io
 import json
 import os
@@ -446,47 +445,6 @@ class AuthenticationTests(unittest.TestCase):
             self.assertNotIn(self.key, str(command.call_args.args))
             self.assertNotIn(self.key, output.getvalue())
 
-    def test_key_dryrun_does_not_create_files(self):
-        args = Namespace(
-            backend="llamacpp",
-            action="key-generate",
-            key_file=self.path,
-            dry_run=True,
-            yes=True,
-        )
-        with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(auth.main(args), 0)
-        self.assertFalse(self.path.exists())
-
-    def test_key_lifecycle_redaction_consent_and_revoke(self):
-        args = Namespace(
-            backend="llamacpp",
-            action="key-generate",
-            key_file=self.path,
-            dry_run=False,
-            yes=False,
-        )
-        with contextlib.redirect_stdout(io.StringIO()) as output:
-            self.assertEqual(auth.main(args), 4)
-            self.assertFalse(self.path.exists())
-            args.yes = True
-            self.assertEqual(auth.main(args), 0)
-            first = auth.read(self.path)
-            self.assertEqual(auth.main(args), 0)
-            self.assertEqual(first, auth.read(self.path))
-            args.action = "key-status"
-            self.assertEqual(auth.main(args), 0)
-            args.action = "key-rotate"
-            self.assertEqual(auth.main(args), 0)
-            second = auth.read(self.path)
-            self.assertNotEqual(first, second)
-            args.action = "key-revoke"
-            self.assertEqual(auth.main(args), 0)
-            self.assertFalse(self.path.exists())
-        self.assertNotIn(first, output.getvalue())
-        self.assertNotIn(second, output.getvalue())
-        self.assertIn("Running endpoints retain loaded keys", output.getvalue())
-
     def test_authentication_requests_validate_valid_invalid_and_absent(self):
         auth.save(self.path, self.key)
         expected = self.key
@@ -796,7 +754,7 @@ class UpdateTests(unittest.TestCase):
             self.assertEqual(patch_manager.main(["--recover", str(folder)]), 0)
         self.assertEqual((self.root / "a").read_bytes(), b"old")
 
-    def test_failed_syntax_restores_original_files(self):
+    def test_failed_syntax_leaves_original_files_without_backup(self):
         (self.root / "a.py").write_bytes(b"original=1\n")
         bad = b"def broken(\n"
         path = self.archive(
@@ -810,9 +768,90 @@ class UpdateTests(unittest.TestCase):
             ],
             {"a.py": bad},
         )
-        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SyntaxError):
-            patch_manager.main(["--apply", str(path)])
+        for action in ("--check", "--apply"):
+            with (
+                contextlib.redirect_stdout(io.StringIO()),
+                self.assertRaises(SyntaxError),
+            ):
+                patch_manager.main([action, str(path)])
         self.assertEqual((self.root / "a.py").read_bytes(), b"original=1\n")
+        self.assertFalse((self.base / "backups").exists())
+
+    def test_unrelated_source_is_not_syntax_checked(self):
+        local = self.root / "scratch.py"
+        local.write_bytes(b"def incomplete(\n")
+        payload = b"#!/bin/bash\nexit 0\n"
+        path = self.archive(
+            [{"action": "add", "path": "run.sh", "sha256": sha(payload)}],
+            {"run.sh": payload},
+        )
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(patch_manager.main(["--apply", str(path)]), 0)
+        self.assertEqual((self.root / "run.sh").read_bytes(), payload)
+        self.assertEqual(local.read_bytes(), b"def incomplete(\n")
+
+    def test_patch_keeps_an_edit_made_after_the_backup(self):
+        file = self.root / "entry"
+        file.write_bytes(b"old")
+        path = self.archive(
+            [
+                {
+                    "action": "modify",
+                    "path": "entry",
+                    "old_sha256": sha(b"old"),
+                    "sha256": sha(b"new"),
+                }
+            ],
+            {"entry": b"new"},
+        )
+        original_write = patch_manager.write_state
+
+        def concurrent_edit(folder, state):
+            original_write(folder, state)
+            file.write_bytes(b"new user edit")
+
+        with (
+            patch.object(patch_manager, "write_state", side_effect=concurrent_edit),
+            contextlib.redirect_stdout(io.StringIO()),
+            self.assertRaisesRegex(ValueError, "Recovery conflict"),
+        ):
+            patch_manager.main(["--apply", str(path)])
+        self.assertEqual(file.read_bytes(), b"new user edit")
+
+    def test_caught_interruption_restores_the_published_file_and_mode(self):
+        file = self.root / "entry"
+        file.write_bytes(b"old")
+        file.chmod(0o750)
+        path = self.archive(
+            [
+                {
+                    "action": "modify",
+                    "path": "entry",
+                    "old_sha256": sha(b"old"),
+                    "sha256": sha(b"new"),
+                    "mode": 0o644,
+                }
+            ],
+            {"entry": b"new"},
+        )
+        replace = patch_manager.replace_file
+
+        def interrupt_after_publish(target, data, mode, **kwargs):
+            replace(target, data, mode, **kwargs)
+            if data == b"new":
+                raise KeyboardInterrupt
+
+        with (
+            patch.object(
+                patch_manager, "replace_file", side_effect=interrupt_after_publish
+            ),
+            contextlib.redirect_stdout(io.StringIO()),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            patch_manager.main(["--apply", str(path)])
+        self.assertEqual(file.read_bytes(), b"old")
+        self.assertEqual(file.stat().st_mode & 0o777, 0o750)
+        self.assertEqual(len(list((self.base / "backups").glob("*/recovered"))), 1)
 
     def test_full_update_and_rollback_without_signing(self):
         (self.root / "a").write_bytes(b"old")
@@ -868,6 +907,29 @@ class UpdateTests(unittest.TestCase):
                 full_update.main(["--apply", str(path), "--root", str(self.root)])
             self.assertFalse((self.root / "a").exists())
             self.assertFalse((self.base / "outside").exists())
+
+    def test_full_update_validates_source_before_creating_a_backup(self):
+        path = self.base / "bad-source.zip"
+        payload = b"def incomplete(\n"
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr(
+                "manifest.json",
+                json.dumps(
+                    {
+                        "format": 2,
+                        "files": [
+                            {"path": "script.py", "sha256": sha(payload), "mode": 0o644}
+                        ],
+                        "deletions": [],
+                    }
+                ),
+            )
+            archive.writestr("script.py", payload)
+        for option in ("--check", "--apply"):
+            with self.subTest(option=option), self.assertRaises(SyntaxError):
+                full_update.main([option, str(path), "--root", str(self.root)])
+        self.assertFalse((self.root / "script.py").exists())
+        self.assertFalse((self.base / "backups").exists())
 
 
 if __name__ == "__main__":

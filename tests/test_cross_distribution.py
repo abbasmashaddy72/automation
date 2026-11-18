@@ -1,8 +1,8 @@
 """Contract tests for cross-family package resolution, never touching host packages."""
 
 import argparse
-import importlib.util
 import io
+import subprocess
 import contextlib
 from pathlib import Path
 from unittest import TestCase
@@ -58,6 +58,36 @@ class CatalogTests(TestCase):
 
 
 class Commands(TestCase):
+    def test_native_install_and_reinstall_deduplicate_package_alias_targets(self):
+        for reinstall in (False, True):
+            with self.subTest(reinstall=reinstall):
+                command = a.native_install_cmd(
+                    ["git", "curl", "git"], {"family": "debian"}, reinstall=reinstall
+                )
+                self.assertEqual(command[-2:], ["git", "curl"])
+                self.assertEqual(command.count("git"), 1)
+
+    def test_dnf_reinstall_requires_the_same_package_version_and_architecture(self):
+        installed = "git 0 2.52.0 1.el9 x86_64\n"
+        for candidate, expected in (
+            ("git (none) 2.52.0 1.el9 x86_64\n", True),
+            ("git 0 2.52.1 1.el9 x86_64\n", False),
+            ("git 0 2.52.0 1.el9 aarch64\n", False),
+            ("git-core 0 2.52.0 1.el9 x86_64\n", False),
+        ):
+            with self.subTest(candidate=candidate):
+
+                def run(argv):
+                    self.assertTrue(
+                        argv[argv.index("--queryformat") + 1].endswith("\n")
+                    )
+                    stdout = installed if argv[0] == "rpm" else candidate
+                    return subprocess.CompletedProcess(argv, 0, stdout, "")
+
+                self.assertEqual(
+                    a.providers.rpm_reinstall_available("git", runner=run), expected
+                )
+
     def test_native_install_cmd_uses_mapping(self):
         self.assertEqual(
             a.install_cmd("firefox", {"family": "opensuse"})[-1], "MozillaFirefox"

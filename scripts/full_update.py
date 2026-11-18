@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import contextlib
 import fcntl
-import io
 import json
 from pathlib import Path
 import stat
@@ -26,7 +25,8 @@ def operations(archive):
         seen.add(name)
     manifest = json.loads(archive.read("manifest.json"))
     if (
-        manifest.get("format") != 2
+        not isinstance(manifest, dict)
+        or manifest.get("format") != 2
         or not isinstance(manifest.get("files"), list)
         or not isinstance(manifest.get("deletions"), list)
     ):
@@ -37,6 +37,8 @@ def operations(archive):
         expected.add("signature.ed25519")
     paths = set()
     for record in manifest["files"]:
+        if not isinstance(record, dict):
+            raise ValueError("Invalid release file record")
         name = patch.valid_name(record["path"])
         if name in paths:
             raise ValueError("Duplicate release path")
@@ -65,8 +67,10 @@ def operations(archive):
         }
         if target.exists():
             op["old_sha256"] = old
+        patch.validate_operation_fields(op)
         result.append(op)
     for op in manifest["deletions"]:
+        patch.validate_operation_fields(op)
         name = patch.valid_name(op["path"])
         if name in paths or op.get("action") != "delete":
             raise ValueError("Invalid release deletion")
@@ -111,31 +115,25 @@ def main(argv=None):
             patch.verify_authenticity(
                 archive, allow_unsigned=args.allow_unsigned, trust_keys=args.trust_key
             )
-            # Convert the verified source to the existing patch contract in memory.
-            stream = io.BytesIO()
-            with zipfile.ZipFile(stream, "w") as converted:
-                converted.writestr(
-                    "manifest.json", json.dumps({"format": 1, "operations": ops})
-                )
-                for op in ops:
-                    if op["action"] != "delete":
-                        converted.writestr(
-                            "payload/" + op["path"], archive.read(op["path"])
-                        )
-        stream.seek(0)
-        with zipfile.ZipFile(stream) as converted:
-            ops = patch.read_zip(converted)
             if args.check:
+                patch.validate_payload_sources(archive, ops, payload_prefix="")
                 return 0 if patch.check(ops) else 3
             if not ops:
                 print("Full release already applied.")
                 return 0
-            return patch.apply(converted, ops)
+            return patch.apply(archive, ops, payload_prefix="")
 
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile) as exc:
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        SyntaxError,
+        zipfile.BadZipFile,
+    ) as exc:
         print("Full update failed:", exc, file=sys.stderr)
         sys.exit(2)

@@ -53,6 +53,11 @@ run_lint() {
 }
 
 run_system_tests() {
+    # The source validator exercises find from an unprivileged test account.
+    if ! command -v find > /dev/null 2>&1; then
+        bash setup.sh packages install --select findutils --replace findutils=findutils --no-lerd --no-auto-search --yes
+    fi
+    command -v find
     # Exact native shell packages only; repository absence is an explicit
     # capability skip, never a reason to add third-party repositories.
     for shell in fish zsh; do
@@ -128,7 +133,10 @@ install_tools() {
     fi
 }
 install_tools "$1"
-install_tools "$1"
+repeat_install=$(install_tools "$1")
+printf '%s\n' "$repeat_install"
+printf '%s\n' "$repeat_install" | grep -E '^Review: .* installable=0 '
+bash setup.sh packages repair --select git --no-lerd --no-auto-search --yes
 command -v git
 command -v curl
 command -v wget

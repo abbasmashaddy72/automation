@@ -19,7 +19,7 @@ def dispatch(argv=None):
     a = list(sys.argv[1:] if argv is None else argv)
     if a and a[0] in ("--help", "-h", "help"):
         print(
-            "Usage: bash setup.sh ai server {hardware|storage|plan|install|status|models|model-download|switch|benchmark|tune|urls|key-show|key-rotate}"
+            "Usage: bash setup.sh ai server {hardware|storage|plan|install|status|models|model-download|switch|benchmark|tune|urls|key-status|key-show|key-copy|key-generate|key-update|key-rotate|key-revoke}"
         )
         print(
             "Or: bash setup.sh ai llamacpp {model-search|model-files|gguf-list|gguf-download|...}"
@@ -77,8 +77,18 @@ def dispatch(argv=None):
         "list-models": "models",
         "benchmark": "benchmark",
         "tune": "tune",
-        "key-show": "key-show",
-        "key-rotate": "key-rotate",
+        **{
+            f"key-{verb}": f"key-{verb}"
+            for verb in (
+                "status",
+                "show",
+                "copy",
+                "generate",
+                "update",
+                "rotate",
+                "revoke",
+            )
+        },
         "model-download": "model-download",
         "model-select": "switch",
         "service-status": "status",

@@ -120,3 +120,5 @@ bash scripts/update.sh --recover
 Use the new updater with `--root /absolute/old-toolkit` when an old updater has
 incompatible policy. Temporary archive fixtures test checksums, malicious paths,
 conflicts, deletions, interrupted recovery and preservation of subsequent edits.
+
+Check and apply validate the Bash and Python payloads in patches and full releases before replacing files. Full releases use the same backup and recovery logic directly from the verified ZIP. Apply rechecks each affected file against its backup before writing. If a later edit conflicts with recovery, the updater preserves the edit and leaves the backup receipt for inspection.

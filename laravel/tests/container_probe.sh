@@ -4,6 +4,7 @@ set -Eeuo pipefail
     echo 'Disposable rootless-container opt-in required' >&2
     exit 4
 }
+trap 'printf "LARAVEL_FAILURE_LINE=%d STATUS=%d\n" "$LINENO" "$?" >&2' ERR
 export DEBIAN_FRONTEND=noninteractive PYTHONDONTWRITEBYTECODE=1
 cp -a /portable-laravel /opt/laravel-toolkit
 cd /tmp
@@ -103,9 +104,14 @@ while not pathlib.Path("/tmp/stop-release-traffic").exists():
         connection.request("GET", "/release-check", headers={"Host": "example.test"})
         response = connection.getresponse()
         body = response.read()
-        assert response.status == 200 and body in (b"first", b"second"), (response.status, body[:50])
+        if response.status != 200 or body not in (b"first", b"second"):
+            print(f"LARAVEL_TRAFFIC_FAILURE=unexpected_response HTTP={response.status}", flush=True)
+            raise SystemExit(1)
         seen.add(body)
         pathlib.Path("/tmp/traffic-seen-" + body.decode()).touch()
+    except (OSError, http.client.HTTPException) as error:
+        print(f"LARAVEL_TRAFFIC_FAILURE={type(error).__name__}", flush=True)
+        raise
     finally:
         connection.close()
     time.sleep(0.03)
@@ -130,11 +136,13 @@ fi
 grep -F 'Candidate Laravel health route' /tmp/unhealthy-candidate.log
 [[ "$(readlink /srv/laravel-fixture/current)" == "$first" ]]
 printf 'FAILED_CANDIDATE_KEPT_ACTIVE=yes\n'
+printf 'LARAVEL_STAGE=second-deployment\n'
 runuser -u deploy -- sh -c 'printf first-upload > /srv/laravel-fixture/shared/storage/app/public/upload.txt; cd /tmp/laravel-source; printf second > release-version.txt; git checkout HEAD^ -- bootstrap/app.php; git add .; git commit -qm second'
 "${deploy[@]}"
 second="$(readlink /srv/laravel-fixture/current)"
 [[ "$first" != "$second" ]]
 wait_for_release_traffic second
+printf 'LARAVEL_STAGE=rollback\n'
 runuser -u deploy -- bash /opt/laravel-toolkit/laravel-deploy.sh --site-root /srv/laravel-fixture --rollback --fpm-service php8.3-fpm.service --approve-service-changes --yes
 [[ "$(readlink /srv/laravel-fixture/current)" == "$first" ]]
 curl --fail --silent --header 'Host: example.test' http://127.0.0.1/release-check | grep -qx first

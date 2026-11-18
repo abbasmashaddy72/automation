@@ -200,6 +200,51 @@ def exact_available(package, info, *, runner=None):
     return result
 
 
+def rpm_reinstall_available(package, *, runner=None):
+    """DNF can reinstall only the exact installed RPM from a configured repository."""
+    discovery.validate_term(package)
+    run = runner or _run
+    installed = run(
+        [
+            "rpm",
+            "-q",
+            "--queryformat",
+            "%{NAME} %{EPOCHNUM} %{VERSION} %{RELEASE} %{ARCH}\n",
+            package,
+        ]
+    )
+    available = run(
+        [
+            "dnf",
+            "-q",
+            "--cacheonly",
+            "repoquery",
+            "--available",
+            "--queryformat",
+            "%{name} %{epoch} %{version} %{release} %{arch}\n",
+            package,
+        ]
+    )
+
+    def builds(result):
+        if result is None or result.returncode != 0:
+            return set()
+        matches = set()
+        for line in result.stdout.splitlines():
+            fields = line.split()
+            if len(fields) != 5 or fields[0] != package:
+                continue
+            _, epoch, version, release, architecture = fields
+            if epoch.lower() in ("(none)", "none"):
+                epoch = "0"
+            if epoch.isdecimal():
+                matches.add((epoch, version, release, architecture))
+        return matches
+
+    current = builds(installed)
+    return bool(current and current <= builds(available))
+
+
 def choose_native(requested, info, *, runner=None):
     """Return a validated curated native package name or None."""
     for name in candidates(requested, info):

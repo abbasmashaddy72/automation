@@ -1,7 +1,5 @@
 """Independent folder configuration, isolation and prerequisite safety."""
 
-import contextlib
-import io
 import os
 from pathlib import Path
 import shutil
@@ -13,7 +11,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from laravel_toolkit import config, provision, deploy, prerequisites, templates
+from laravel_toolkit import config, provision, prerequisites, templates
 from argparse import Namespace
 
 

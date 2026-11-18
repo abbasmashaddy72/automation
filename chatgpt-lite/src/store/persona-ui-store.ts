@@ -2,9 +2,7 @@ import type { PersonaId } from '@/lib/types'
 import { create } from 'zustand'
 
 type PersonaModalState =
-  | { mode: 'closed' }
-  | { mode: 'create' }
-  | { mode: 'edit'; personaId: PersonaId }
+  { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; personaId: PersonaId }
 
 interface PersonaUiState {
   personaModal: PersonaModalState

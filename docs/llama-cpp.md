@@ -77,12 +77,40 @@ The default is a small, quantized model suitable for a 4 GB card. Choosing a
 19 GB GGUF on this system is **not** recommended; disk size and runtime memory
 are separate. `--allow-oversized` explicitly accepts the download risk.
 
+## Existing services and API credentials
+
+Use **Local AI → AI Configuration** to inspect the current computer or a trusted SSH target. **Inspect model endpoint** checks the selected backend’s model-list route over loopback. It reports visible model names, access without credentials, an authentication or access-policy challenge, or an unavailable endpoint. Enter a custom port when the backend uses one. Service inventory checks known executables, processes, and system/user units. A container, differently named unit, or custom listener may require explicit endpoint inspection.
+
+```bash
+bash setup.sh ai server engines
+bash setup.sh ai server status
+bash setup.sh ai server inspect --inspect-backend ollama --port 11434
+bash setup.sh ai server plan
+```
+
+The preview reports whether it would reuse, build, update, or rebuild the binary. An existing managed build is reused by default, including its configured backend. Update and reinstall are explicit choices. A detected external llama.cpp process or occupied requested port blocks a duplicate service. Keep external engines under their existing management.
+
+### Managed LAN gateway key
+
+```bash
+bash setup.sh ai server key-status
+bash setup.sh ai server key-show                 # private terminal, authorized read
+bash setup.sh ai server key-copy                 # local session clipboard or private terminal
+bash setup.sh ai server key-rotate --dry-run
+bash setup.sh ai server key-rotate --yes         # generate a replacement
+bash setup.sh ai server key-update --yes         # enter a replacement in a hidden prompt
+bash setup.sh ai server key-generate --yes       # only when the owned gateway's key is missing
+bash setup.sh ai server key-revoke --yes         # stop and disable the gateway, remove its key
+```
+
+Dashboard status uses a fixed mask. Key changes are restricted to the toolkit’s exact LAN gateway unit and authorized terminal commands. A gateway installed by an older toolkit may need a reviewed repair with `ai server install --with-lan-api` before credential changes. An existing key can be replaced while its gateway is running. For a missing key, start managed llama.cpp first. The gateway’s authenticated loopback listener allows verification without sending the key over the LAN. Generation or replacement succeeds only when the protected model endpoint accepts the new key and rejects absent and invalid credentials. If verification fails, the previous key and running state are restored where supported.
+
+For an SSH target, run these commands in an interactive terminal on that server. External API keys stay with their application or service owner. ChatGPT Lite uses raw loopback llama.cpp and keeps working across LAN key changes. If Zed or another client uses the LAN gateway, update its own credential store with the new key after rotation. The toolkit cannot update external credential stores without a supported secure write interface.
+
 ## Access from other LAN devices
 
 ```bash
 bash setup.sh ai server urls
-bash setup.sh ai server status
-bash setup.sh ai server key-show
 ```
 
 Example, assuming DHCP still assigns `LAN_IP`:
@@ -96,10 +124,10 @@ From a **different trusted LAN device**:
 ```bash
 read -rsp 'AI API key: ' AI_KEY; echo
 curl -fsS http://LAN_IP:11435/v1/models \
-  -H "Authorization: Bearer $AI_KEY"
+  --config <(printf 'header = "Authorization: Bearer %s"\n' "$AI_KEY")
 
 curl -fsS http://LAN_IP:11435/v1/chat/completions \
-  -H "Authorization: Bearer $AI_KEY" \
+  --config <(printf 'header = "Authorization: Bearer %s"\n' "$AI_KEY") \
   -H 'Content-Type: application/json' \
   -d '{"model":"shared-ai","messages":[{"role":"user","content":"Hello"}],"max_tokens":64}'
 unset AI_KEY

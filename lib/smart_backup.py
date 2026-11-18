@@ -439,6 +439,7 @@ def copy_tree(root, entries, output, verification):
 
 def zip_tree(root, entries, output, verification):
     digests = {}
+    expected_names = []
     with zipfile.ZipFile(
         output, "x", compression=zipfile.ZIP_DEFLATED, compresslevel=3
     ) as archive:
@@ -452,6 +453,7 @@ def zip_tree(root, entries, output, verification):
                 raise ValueError(f"ZIP cannot safely represent this filename: {path}")
             is_dir = stat.S_ISDIR(before.st_mode)
             item = zipfile.ZipInfo(name + ("/" if is_dir else ""))
+            expected_names.append(item.filename)
             date = datetime.fromtimestamp(before.st_mtime)
             date = min(max(date, datetime(1980, 1, 1)), datetime(2107, 12, 31))
             item.date_time = date.timetuple()[:6]
@@ -480,6 +482,10 @@ def zip_tree(root, entries, output, verification):
                 if digest:
                     digests[name] = digest.digest()
     with zipfile.ZipFile(output) as archive:
+        if archive.namelist() != expected_names:
+            raise ValueError(
+                f"ZIP members differ from the backup inventory: {output.name}"
+            )
         if verification == "quick":
             if archive.testzip() is not None:
                 raise ValueError(f"ZIP integrity check failed: {output.name}")

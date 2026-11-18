@@ -19,6 +19,8 @@ from pathlib import Path
 import webbrowser
 
 import discovery
+import filesystem
+import system_profile
 import checklist
 import configuration
 import sources
@@ -59,6 +61,7 @@ ACTIONS = {
     "ai-port-check": ["ai", "server", "port-check"],
     "ai-runtime-context": ["ai", "server", "runtime-context"],
     "ai-status": ["ai", "server", "status"],
+    "ai-key-status": ["ai", "server", "key-status"],
     "ai-plan": ["ai", "server", "plan"],
     "ai-eligibility": ["ai", "server", "plan"],
     "chat": ["chat-lite", "status"],
@@ -375,6 +378,21 @@ def preview_arguments(payload, *, aur_ready, execute=False):
             *ai_options(payload),
             *(["--reconfigure"] if payload.get("reconfigure") is True else []),
         ]
+    if not execute and action == "ai-inspect":
+        backend = payload.get("backend")
+        port = payload.get("port")
+        if backend not in ("llamacpp", "ollama", "vllm", "jan") or (
+            port is not None and (type(port) is not int or not 1 <= port <= 65535)
+        ):
+            raise ValueError("Choose a supported backend and valid loopback port")
+        return [
+            "ai",
+            "server",
+            "inspect",
+            "--inspect-backend",
+            backend,
+            *(["--port", str(port)] if port is not None else []),
+        ]
     if not execute and action == "ai-verify":
         host = payload.get("host", "127.0.0.1")
         if host not in ("127.0.0.1", "::1", "localhost"):
@@ -388,10 +406,24 @@ def preview_arguments(payload, *, aur_ready, execute=False):
             host,
             *(["--port", str(port)] if port is not None else []),
         ]
-    if not execute and action == "ai-models":
+    if not execute and action in ("ai-models", "ai-eligibility"):
         return [*ACTIONS[action], *ai_options({"data_root": payload.get("data_root")})]
     if not execute and action == "ai-plan":
-        return [*ACTIONS[action], *ai_options(payload), *ai_model_options(payload)]
+        mode = payload.get("install_mode", "install")
+        flags = {
+            "install": [],
+            "update": ["--update-source"],
+            "reinstall": ["--rebuild"],
+        }
+        if not isinstance(mode, str) or mode not in flags:
+            raise ValueError("Choose install, update, or reinstall")
+        return [
+            *ACTIONS[action],
+            *ai_options(payload),
+            *ai_model_options(payload),
+            *flags[mode],
+            *(["--reconfigure"] if payload.get("reconfigure") is True else []),
+        ]
     if (
         action in ("chat", "chat-build", "chat-remove")
         and payload.get("port") is not None
@@ -624,7 +656,7 @@ def package_event(line):
     return None
 
 
-def serve(root, entries, info, settings):
+def serve(root, entries, info, settings, *, port=38175):
     if os.geteuid() == 0:
         print("Run the setup dashboard as your regular desktop user.")
         return 3
@@ -715,10 +747,58 @@ def serve(root, entries, info, settings):
                 size = int(self.headers.get("Content-Length", "0"))
                 if not 0 < size <= 1576960:
                     raise ValueError("Invalid request size")
-                payload = json.loads(self.rfile.read(size))
+                payload = json.loads(
+                    self.rfile.read(size), object_pairs_hook=filesystem.unique
+                )
                 if not isinstance(payload, dict):
                     raise ValueError("Expected an operation")
-                if size > 16384 and payload.get("action") != "zed-edit":
+                action = payload.get("action")
+                if action in ("profile-export", "profile-review", "profile-apply"):
+                    if size > system_profile.LIMIT * 2 + 4096:
+                        raise ValueError("Profile request exceeds the 512 KiB limit")
+                    if execute != (action == "profile-apply"):
+                        raise ValueError("Use the matching profile operation")
+                    from automation import config_file, validate_settings
+
+                    state_dir = settings.get("AUTOMATION_STATE_DIR", "")
+                    if action == "profile-export":
+                        result = system_profile.export_profile(
+                            root,
+                            state_dir,
+                            payload.get("sections"),
+                            payload.get("setup"),
+                            config_file,
+                            validate_settings,
+                        )
+                    else:
+                        revision = None
+                        if execute:
+                            revision = payload.get("revision")
+                            if payload.get("confirmed") is not True or not isinstance(
+                                revision, str
+                            ):
+                                raise ValueError(
+                                    "Review and confirm the profile before applying"
+                                )
+                            if not previews.acquire(blocking=False):
+                                return self.respond(
+                                    409, b"An operation is already running"
+                                )
+                            resources.callback(previews.release)
+                        document = system_profile.parse_document(payload.get("profile"))
+                        result = system_profile.restore(
+                            root,
+                            state_dir,
+                            info,
+                            document,
+                            config_file,
+                            validate_settings,
+                            revision=revision,
+                        )
+                    return self.respond(
+                        200, json.dumps(result).encode(), "application/json"
+                    )
+                if size > 16384 and action != "zed-edit":
                     raise ValueError("Invalid request size")
                 if payload.get("action") in ("chat-preview-start", "chat-preview-stop"):
                     if not execute or payload.get("confirmed") is not True:
@@ -766,6 +846,9 @@ def serve(root, entries, info, settings):
                         if execute
                         else (
                             "detect",
+                            "package-status",
+                            "key-status",
+                            "inspect",
                             "plan",
                             "models",
                             "status",
@@ -792,6 +875,8 @@ def serve(root, entries, info, settings):
                         else None,
                         port=payload.get("port"),
                         context_tokens=payload.get("context_tokens"),
+                        packages=payload.get("packages"),
+                        inspect_backend=payload.get("inspect_backend"),
                     )
                     if execute:
                         return self.respond(
@@ -848,7 +933,14 @@ def serve(root, entries, info, settings):
                         if execute
                         else preview_arguments(payload, aur_ready=aur_ready)
                     )
-            except (ValueError, UnicodeError, KeyError, TypeError, OSError) as error:
+            except (
+                ValueError,
+                UnicodeError,
+                KeyError,
+                TypeError,
+                OSError,
+                RecursionError,
+            ) as error:
                 return self.respond(400, str(error).encode())
             if (
                 execute
@@ -860,7 +952,8 @@ def serve(root, entries, info, settings):
                     409,
                     b"Launch the dashboard from an interactive terminal to apply changes.",
                 )
-            # System home probes may be in flight when a different tab opens.
+            # Independent status reads must not block a workflow after navigation.
+            # Checklist mutations still take the execution lock.
             locked = execute or (
                 args[:2] != ["packages", "status"]
                 and payload["action"]
@@ -869,6 +962,8 @@ def serve(root, entries, info, settings):
                     "ai-engines",
                     "system-details",
                     "backup-browse",
+                    "checklist",
+                    "checklist-tasks",
                 )
             )
             if locked and not previews.acquire(blocking=False):
@@ -1020,9 +1115,11 @@ def serve(root, entries, info, settings):
 
     # A stable loopback origin keeps this dashboard's local draft across restarts.
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", 38175), Handler)
+        server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     except OSError as error:
-        print(f"Cannot open the dashboard on 127.0.0.1:38175: {error}", file=sys.stderr)
+        print(
+            f"Cannot open the dashboard on 127.0.0.1:{port}: {error}", file=sys.stderr
+        )
         return 3
     with server:
         host = f"127.0.0.1:{server.server_port}"

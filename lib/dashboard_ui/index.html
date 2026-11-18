@@ -136,12 +136,16 @@
           </div>
         </section>
       </section>
-      <dialog id="decision">
+      <dialog
+        id="decision"
+        aria-labelledby="decision-title"
+        aria-describedby="decision-text"
+      >
         <form method="dialog">
           <h2 id="decision-title"></h2>
           <pre id="decision-text"></pre>
           <div id="decision-fields"></div>
-          <div class="presets">
+          <div class="dialog-actions">
             <button value="cancel">Cancel</button
             ><button class="primary" value="accept">Continue</button>
           </div>
@@ -175,6 +179,7 @@
           <button id="open-ai" type="button">Open Local AI setup</button>
         </section>
         <div id="home-links" class="presets"></div>
+        <p id="profile-status" role="status"></p>
         <h2>Supported package managers</h2>
         <p>
           Arch-based distributions use Pacman. Debian and Ubuntu use APT. Fedora
@@ -214,14 +219,16 @@
           </div>
           <details class="custom-search">
             <summary>Find a custom package</summary>
-            <form id="custom-package" class="presets">
-              <label for="custom-name">Custom package</label>
-              <input
-                id="custom-name"
-                placeholder="Package name"
-                required
-                pattern="[a-zA-Z0-9][a-zA-Z0-9+._\-]{0,95}"
-              />
+            <form id="custom-package" class="control-row field-controls">
+              <label class="model-path" for="custom-name">
+                Custom package
+                <input
+                  id="custom-name"
+                  placeholder="Package name"
+                  required
+                  pattern="[a-zA-Z0-9][a-zA-Z0-9+._\-]{0,95}"
+                />
+              </label>
               <button type="submit">Find sources</button>
               <button type="button" id="add-custom">Add to selection</button>
             </form>
@@ -233,10 +240,18 @@
             </aside>
             <section class="package-panel" aria-labelledby="category-title">
               <header class="package-head">
-                <h2 id="category-title">Packages</h2>
-                <button type="button" id="select-visible">
-                  Select visible
-                </button>
+                <div>
+                  <h2 id="category-title">Packages</h2>
+                  <small id="package-status-message" role="status"></small>
+                </div>
+                <div class="control-row">
+                  <button type="button" id="refresh-package-status">
+                    Refresh status
+                  </button>
+                  <button type="button" id="select-visible">
+                    Select visible
+                  </button>
+                </div>
               </header>
               <div id="packages" class="package-grid"></div>
             </section>
